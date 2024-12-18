@@ -7,7 +7,7 @@
     <PackageProjectUrl>https://github.com/sunkaixuan/SqlSugar</PackageProjectUrl>
     <PackageLicenseUrl></PackageLicenseUrl>
     <PackageIconUrl></PackageIconUrl>
-    <PackageId>SqlSugarEx</PackageId>
+    <PackageId>SqlSugarCoreEx</PackageId>
 	<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Description>果糖大数据科技（南通）有限公司</Description>
     <Company>果糖大数据科技（南通）有限公司</Company>
