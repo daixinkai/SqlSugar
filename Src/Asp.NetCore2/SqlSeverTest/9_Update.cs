@@ -1,8 +1,12 @@
-﻿using SqlSugar;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using SqlSeverTest;
+using SqlSugar;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using static OrmTest._8_Insert;
 
@@ -15,13 +19,36 @@ namespace OrmTest
         /// </summary>
         internal static void Init()
         {
+
+            static JsonSerializerSettings CreateDefaultSettings()
+            {
+                return new JsonSerializerSettings
+                {
+                    NullValueHandling = NullValueHandling.Ignore
+                };
+            }
+
             var db = DbHelper.GetNewDb();
 
             // 初始化实体表格（Initialize entity tables）
             db.CodeFirst.InitTables<StudentWithSnowflake>();
 
+            JsonConvert.DefaultSettings = CreateDefaultSettings;
+
+            JsonDbValue jsonValue = default;
+
+            var result1 = db.Updateable<StudentWithSnowflake>().SetColumns(s => new StudentWithSnowflake
+            {
+                JsonValue = jsonValue
+            }).Where(s => s.Id == 1).IgnoreNullColumns(false).ExecuteCommand();
+
+            Console.WriteLine(result1);
+
+
+
             // 创建一个需要更新的实体对象（Create an entity object to be updated）
-            var updateObj = new StudentWithSnowflake() { Id = 1, Name = "order1" };
+
+            var updateObj = new StudentWithSnowflake() { Id = 1, Name = "order1", JsonValue = default };
 
             // 创建需要批量更新的实体对象列表（Create a list of entity objects to be updated in bulk）
             var updateObjs = new List<StudentWithSnowflake> {
@@ -32,7 +59,9 @@ namespace OrmTest
             /***************************根据实体更新 (Update based on entity)***************************/
 
             // 更新单个实体对象（Update a single entity object）
-            var result = db.Updateable(updateObj).ExecuteCommand();
+            //var result = db.Updateable(updateObj).ExecuteCommand();
+
+            return;
 
             // 批量更新实体对象列表（Update a list of entity objects in bulk）
             var result20 = db.Updateable(updateObjs).ExecuteCommand();
@@ -42,7 +71,7 @@ namespace OrmTest
             var result3 = db.Updateable(updateObj).IgnoreColumns(it => new { it.Remark }).ExecuteCommand();
 
             // 更新实体对象的指定列（Update specific columns of the entity object）
-            var result4 = db.Updateable(updateObj).UpdateColumns(it => new { it.Name, it.Date  }).ExecuteCommand();
+            var result4 = db.Updateable(updateObj).UpdateColumns(it => new { it.Name, it.Date }).ExecuteCommand();
 
             // 如果没有主键，按照指定列更新实体对象（If there is no primary key, update entity object based on specified columns）
             var result5 = db.Updateable(updateObj).WhereColumns(it => new { it.Id }).ExecuteCommand();
@@ -52,7 +81,7 @@ namespace OrmTest
 
             // 忽略为NULL和默认值的列进行更新（Ignore columns with NULL and default values during update）
             var result7 = db.Updateable(updateObj)
-                          .IgnoreColumns(ignoreAllNullColumns: true, ignoreAllDefaultValue:true)
+                          .IgnoreColumns(ignoreAllNullColumns: true, ignoreAllDefaultValue: true)
                           .ExecuteCommand();
 
             // 使用最快的方式批量更新实体对象列表（Bulk update a list of entity objects using the fastest method）
@@ -83,6 +112,9 @@ namespace OrmTest
             public DateTime Date { get; set; }
             [SugarColumn(IsNullable = true)]
             public string Remark { get; set; }
+
+            [SugarColumn(IsNullable = true, IsJson = true)]
+            public JsonDbValue JsonValue { get; set; }
         }
     }
 }

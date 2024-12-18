@@ -1624,7 +1624,7 @@ namespace SqlSugar
                     } 
                     else if (item.IsArray)
                     {
-                        result = result.Replace(item.ParameterName, "'{" + new SerializeService().SerializeObject(item.Value).TrimStart('[').TrimEnd(']') + "}'");
+                        result = result.Replace(item.ParameterName, "'{" + DefaultServices.Serialize.SerializeObject(item.Value).TrimStart('[').TrimEnd(']') + "}'");
                     }
                     else if (item.Value is byte[]&&connectionConfig.DbType==DbType.PostgreSQL)
                     {
