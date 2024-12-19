@@ -1085,7 +1085,7 @@ namespace SqlSugar
         }
         internal static string GetMD5(string myString)
         {
-            MD5 md5 = new MD5CryptoServiceProvider();
+            using MD5 md5 = MD5.Create();
             byte[] fromData = System.Text.Encoding.Unicode.GetBytes(myString);
             byte[] targetData = md5.ComputeHash(fromData);
             string byte2String = null;
@@ -1703,7 +1703,7 @@ namespace SqlSugar
         }
         public static string FieldNameSql()
         {
-            if (StaticConfig.TableQuerySqlKey!=null&& StaticConfig.TableQuerySqlKey!=Guid.Empty) 
+            if (/*StaticConfig.TableQuerySqlKey!=null&&*/ StaticConfig.TableQuerySqlKey!=Guid.Empty) 
             {
                return  $"[value=sql{StaticConfig.TableQuerySqlKey}]";
             }

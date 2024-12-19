@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿#nullable enable
+using Newtonsoft.Json.Linq;
+using SqlSugar;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,9 +8,30 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
+
 //namespace System.Text.Json
-namespace SqlSeverTest
+namespace OrmTest
 {
+
+    internal class DbUniqueIndexAttribute : SugarIndexAttribute
+    {
+        public DbUniqueIndexAttribute(string indexName, string fieldName)
+            : base(indexName, fieldName, OrderByType.Asc, true)
+        {
+        }
+        public DbUniqueIndexAttribute(string indexName, string fieldName, OrderByType sortType)
+            : base(indexName, fieldName, sortType, true)
+        {
+        }
+        public DbUniqueIndexAttribute(string indexName, string fieldName1, OrderByType sortType1, string fieldName2, OrderByType sortType2)
+        : base(indexName, fieldName1, sortType1, fieldName2, sortType2, true)
+        {
+        }
+        public DbUniqueIndexAttribute(string indexName, string fieldName1, OrderByType sortType1, string fieldName2, OrderByType sortType2, string fieldName3, OrderByType sortType3)
+        : base(indexName, fieldName1, sortType1, fieldName2, sortType2, fieldName3, sortType3, true)
+        {
+        }
+    }
     [System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonDbValueConverter))]
     [Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonDbValueConverter))]
     public struct JsonDbValue

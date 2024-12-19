@@ -36,7 +36,7 @@ namespace SqlSugar
                     {
                         if (ex is SqlSugarException)
                         {
-                            throw ex;
+                            throw;
                         }
                         else
                         {
@@ -227,7 +227,7 @@ namespace SqlSugar
                 CommandType = CommandType.Text;
                 if (ErrorEvent != null)
                     ExecuteErrorEvent(sql, parameters, ex);
-                throw ex;
+                throw;
             }
             finally
             {
@@ -274,7 +274,7 @@ namespace SqlSugar
                 CommandType = CommandType.Text;
                 if (ErrorEvent != null)
                     ExecuteErrorEvent(sql, parameters, ex);
-                throw ex;
+                throw;
             }
         }
         public override async Task<object> GetScalarAsync(string sql, params SugarParameter[] parameters)
@@ -309,7 +309,7 @@ namespace SqlSugar
                 CommandType = CommandType.Text;
                 if (ErrorEvent != null)
                     ExecuteErrorEvent(sql, parameters, ex);
-                throw ex;
+                throw;
             }
             finally
             {

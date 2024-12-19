@@ -32,6 +32,7 @@ namespace OrmTest
 
             // 初始化实体表格（Initialize entity tables）
             db.CodeFirst.InitTables<StudentWithSnowflake>();
+            db.CodeFirst.InitTables<StudentWithSnowflake2>();
 
             JsonConvert.DefaultSettings = CreateDefaultSettings;
 
@@ -102,14 +103,35 @@ namespace OrmTest
                              .ExecuteCommand();
         }
 
-        // 实体类：带雪花主键（Entity class: With snowflake primary key）
-        [SugarTable("StudentWithSnowflake09")]
-        public class StudentWithSnowflake
+
+        [DbUniqueIndex("uk_name", nameof(Name), OrderByType.Asc)]
+        public abstract class BaseTable
         {
             [SugarColumn(IsPrimaryKey = true)]
             public long Id { get; set; }
             public string Name { get; set; }
             public DateTime Date { get; set; }
+        }
+
+
+        // 实体类：带雪花主键（Entity class: With snowflake primary key）
+        [SugarTable("StudentWithSnowflake09")]
+
+        public class StudentWithSnowflake : BaseTable
+        {
+
+            [SugarColumn(IsNullable = true)]
+            public string Remark { get; set; }
+
+            [SugarColumn(IsNullable = true, IsJson = true)]
+            public JsonDbValue JsonValue { get; set; }
+        }
+
+        // 实体类：带雪花主键（Entity class: With snowflake primary key）
+        [SugarTable("StudentWithSnowflake092")]
+        public class StudentWithSnowflake2 : BaseTable
+        {
+
             [SugarColumn(IsNullable = true)]
             public string Remark { get; set; }
 

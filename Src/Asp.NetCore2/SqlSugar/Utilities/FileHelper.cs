@@ -33,9 +33,9 @@ namespace SqlSugar
                     }
                 }
             }
-            catch(Exception ex)
+            catch(Exception)
             {
-                throw ex;
+                throw;
             }
         }
         public static bool IsExistDirectory(string directoryPath)

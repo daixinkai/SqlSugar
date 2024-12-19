@@ -662,10 +662,10 @@ namespace SqlSugar
             this.Context.Ado.ExecuteCommand(sql);
             return true;
         }
-        public virtual bool IsAnyIndex(string indexName)
+        public virtual bool IsAnyIndex(string tableName, string indexName)
         {
             //string sql = string.Format(this.IsAnyIndexSql, indexName);
-            string sql = string.Format(this.IsAnyIndexSql, indexName, this.Context.Ado.Connection.Database);
+            string sql = string.Format(this.IsAnyIndexSql, indexName, this.Context.Ado.Connection.Database, tableName);
             return this.Context.Ado.GetInt(sql)>0;
         }
         public virtual bool AddRemark(EntityInfo entity)
@@ -718,7 +718,7 @@ namespace SqlSugar
                 {
                     var columnNames = indexColumns.Where(it => it.IndexGroupNameList.Any(i => i.Equals(item, StringComparison.CurrentCultureIgnoreCase))).Select(it=>it.DbColumnName).ToArray();
                     var indexName = string.Format("Index_{0}_{1}"+this.Context.CurrentConnectionConfig.IndexSuffix,entityInfo.DbTableName, string.Join("_", columnNames));
-                    if (!IsAnyIndex(indexName))
+                    if (!IsAnyIndex(entityInfo.DbTableName, indexName))
                     {
                         CreateIndex(entityInfo.DbTableName, columnNames);
                     }
@@ -734,7 +734,7 @@ namespace SqlSugar
                 {
                     var columnNames = uIndexColumns.Where(it => it.UIndexGroupNameList.Any(i => i.Equals(item, StringComparison.CurrentCultureIgnoreCase))).Select(it => it.DbColumnName).ToArray();
                     var indexName = string.Format("Index_{0}_{1}_Unique" + this.Context.CurrentConnectionConfig.IndexSuffix, entityInfo.DbTableName, string.Join("_", columnNames));
-                    if (!IsAnyIndex(indexName))
+                    if (!IsAnyIndex(entityInfo.DbTableName, indexName))
                     {
                         CreateUniqueIndex(entityInfo.DbTableName, columnNames);
                     }

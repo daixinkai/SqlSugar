@@ -456,7 +456,7 @@ namespace SqlSugar
                 CommandType = CommandType.Text;
                 if (ErrorEvent != null)
                     ExecuteErrorEvent(sql, parameters, ex);
-                throw ex;
+                throw;
             }
             finally
             {

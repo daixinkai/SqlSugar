@@ -48,9 +48,9 @@ namespace SqlSugar
                 }
                 BulkCopy(dt, copyString, conn, columns);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally 
             {

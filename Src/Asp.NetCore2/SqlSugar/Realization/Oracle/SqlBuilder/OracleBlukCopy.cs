@@ -62,13 +62,13 @@ namespace SqlSugar
 
             }
 
-            catch (Exception ex)
+            catch (Exception)
 
             {
 
                 CloseDb();
 
-                throw ex;
+                throw;
 
             }
 
@@ -110,13 +110,13 @@ namespace SqlSugar
 
             }
 
-            catch (Exception ex)
+            catch (Exception)
 
             {
 
                 CloseDb();
 
-                throw ex;
+                throw;
 
             }
 

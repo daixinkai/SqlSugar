@@ -27,10 +27,10 @@ namespace SqlSugar
                     this.Context.Ado.CommitTran();
                     return result;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     this.Context.Ado.RollbackTran();
-                    throw ex;
+                    throw;
                 }
             }
             else
@@ -49,10 +49,10 @@ namespace SqlSugar
                     this.Context.Ado.CommitTran();
                     return result;
                 }
-                catch (Exception ex)
+                catch //(Exception ex)
                 {
                     this.Context.Ado.RollbackTran();
-                    throw ex;
+                    throw;
                 }
             }
             else
@@ -73,10 +73,10 @@ namespace SqlSugar
                     this.Context.Ado.CommitTran();
                     return result;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     this.Context.Ado.RollbackTran();
-                    throw ex;
+                    throw;
                 }
             }
             else
@@ -95,10 +95,10 @@ namespace SqlSugar
                     this.Context.Ado.CommitTran();
                     return result;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     this.Context.Ado.RollbackTran();
-                    throw ex;
+                    throw;
                 }
             }
             else
