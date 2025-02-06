@@ -10,7 +10,7 @@ using System.Reflection;
 using System.Dynamic;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Serialization;
-
+ 
 namespace SqlSugar
 {
 
@@ -121,7 +121,11 @@ namespace SqlSugar
                 this.QueryBuilder.Includes == null &&
                 this.QueryBuilder.IsDistinct == false)
             {
-
+                if (StaticConfig.EnableAot) 
+                {
+                    var sqlobj = this.Clone().Select<int>(" COUNT(1) ").ToSql();
+                    return this.Context.Ado.GetInt(sqlobj.Key,sqlobj.Value);
+                }
                 return this.Clone().Select<int>(" COUNT(1) ").ToList().FirstOrDefault();
             }
             MappingTableList expMapping;
@@ -849,6 +853,11 @@ namespace SqlSugar
         }
         public virtual string ToSqlString()
         {
+            if (this.EntityInfo?.Type?.IsInterface==true)
+            {
+               this.QueryBuilder.SelectValue = " * ";
+               this.AsType(this.EntityInfo.Type);
+            }
             var sqlObj = this.Clone().ToSql();
             var result = sqlObj.Key;
             if (result == null) return null;

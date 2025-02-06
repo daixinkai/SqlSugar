@@ -31,6 +31,7 @@ namespace SqlSugar
         #endregion
 
         #region Properties
+        internal bool IsOpenAsync { get; set; }
         protected List<IDataParameter> OutputParameters { get; set; }
         public virtual string SqlParameterKeyWord { get { return "@"; } }
         public IDbTransaction Transaction { get; set; }
@@ -39,6 +40,8 @@ namespace SqlSugar
         internal bool OldClearParameters { get; set; }
         public IDataParameterCollection DataReaderParameters { get; set; }
         public TimeSpan SqlExecutionTime { get { return AfterTime - BeforeTime; } }
+        public TimeSpan ConnectionExecutionTime { get { return CheckConnectionAfterTime - CheckConnectionBeforeTime; } }
+        public TimeSpan GetDataExecutionTime { get { return GetDataAfterTime - GetDataBeforeTime; } }
         /// <summary>
         /// Add, delete and modify: the number of affected items;
         /// </summary>
@@ -47,6 +50,10 @@ namespace SqlSugar
         public bool IsDisableMasterSlaveSeparation { get; set; }
         internal DateTime BeforeTime = DateTime.MinValue;
         internal DateTime AfterTime = DateTime.MinValue;
+        internal DateTime GetDataBeforeTime = DateTime.MinValue;
+        internal DateTime GetDataAfterTime = DateTime.MinValue;
+        internal DateTime CheckConnectionBeforeTime = DateTime.MinValue;
+        internal DateTime CheckConnectionAfterTime = DateTime.MinValue;
         public virtual IDbBind DbBind
         {
             get
@@ -66,6 +73,10 @@ namespace SqlSugar
         public virtual bool IsClearParameters { get; set; }
         public virtual Action<string, SugarParameter[]> LogEventStarting => this.Context.CurrentConnectionConfig.AopEvents?.OnLogExecuting;
         public virtual Action<string, SugarParameter[]> LogEventCompleted => this.Context.CurrentConnectionConfig.AopEvents?.OnLogExecuted;
+        public virtual Action<IDbConnection> CheckConnectionExecuting => this.Context.CurrentConnectionConfig.AopEvents?.CheckConnectionExecuting;
+        public virtual Action<IDbConnection, TimeSpan> CheckConnectionExecuted => this.Context.CurrentConnectionConfig.AopEvents?.CheckConnectionExecuted;
+        public virtual Action<string, SugarParameter[]> OnGetDataReadering => this.Context.CurrentConnectionConfig.AopEvents?.OnGetDataReadering;
+        public virtual Action<string, SugarParameter[], TimeSpan> OnGetDataReadered => this.Context.CurrentConnectionConfig.AopEvents?.OnGetDataReadered;
         public virtual Func<string, SugarParameter[], KeyValuePair<string, SugarParameter[]>> ProcessingEventStartingSQL => this.Context.CurrentConnectionConfig.AopEvents?.OnExecutingChangeSql;
         protected virtual Func<string, string> FormatSql { get; set; }
         public virtual Action<SqlSugarException> ErrorEvent => this.Context.CurrentConnectionConfig.AopEvents?.OnError;
@@ -175,6 +186,7 @@ namespace SqlSugar
         }
         public virtual void CheckConnection()
         {
+            this.CheckConnectionBefore(this.Connection);
             if (this.Connection.State != ConnectionState.Open)
             {
                 try
@@ -190,10 +202,12 @@ namespace SqlSugar
                     Check.Exception(true, ErrorMessage.ConnnectionOpen, ex.Message+$"DbType=\"{this.Context.CurrentConnectionConfig.DbType}\";ConfigId=\"{this.Context.CurrentConnectionConfig.ConfigId}\"");
                 }
             }
+            this.CheckConnectionAfter(this.Connection);
         }
 
         public virtual async Task CheckConnectionAsync()
         {
+            this.CheckConnectionBefore(this.Connection);
             if (this.Connection.State != ConnectionState.Open)
             {
                 try
@@ -203,6 +217,31 @@ namespace SqlSugar
                 catch (Exception ex)
                 {
                     Check.Exception(true, ErrorMessage.ConnnectionOpen, ex.Message + $"DbType=\"{this.Context.CurrentConnectionConfig.DbType}\";ConfigId=\"{this.Context.CurrentConnectionConfig.ConfigId}\"");
+                }
+            }
+            this.CheckConnectionAfter(this.Connection);
+        }
+        public virtual void CheckConnectionBefore(IDbConnection Connection)
+        {
+            this.CheckConnectionBeforeTime = DateTime.Now;
+            if (this.IsEnableLogEvent)
+            {
+                Action<IDbConnection> action = CheckConnectionExecuting;
+                if (action != null)
+                {
+                    action(Connection);
+                }
+            }
+        }
+        public virtual void CheckConnectionAfter(IDbConnection Connection)
+        {
+            this.CheckConnectionAfterTime = DateTime.Now;
+            if (this.IsEnableLogEvent)
+            {
+                Action<IDbConnection, TimeSpan> action = CheckConnectionExecuted;
+                if (action != null)
+                {
+                    action(Connection,this.ConnectionExecutionTime);
                 }
             }
         }
@@ -588,7 +627,7 @@ namespace SqlSugar
                 if (this.ProcessingEventStartingSQL != null)
                     ExecuteProcessingSQL(ref sql,ref parameters);
                 ExecuteBefore(sql, parameters);
-                var sqlCommand = GetCommand(sql, parameters);
+                var sqlCommand =IsOpenAsync? await GetCommandAsync(sql, parameters) : GetCommand(sql, parameters);
                 int count;
                 if (this.CancellationToken == null)
                     count=await sqlCommand.ExecuteNonQueryAsync();
@@ -630,7 +669,7 @@ namespace SqlSugar
                 if (this.ProcessingEventStartingSQL != null)
                     ExecuteProcessingSQL(ref sql,ref parameters);
                 ExecuteBefore(sql, parameters);
-                var sqlCommand = GetCommand(sql, parameters);
+                var sqlCommand = IsOpenAsync ? await GetCommandAsync(sql, parameters) : GetCommand(sql, parameters);
                 DbDataReader sqlDataReader;
                 if(this.CancellationToken==null)
                     sqlDataReader=await sqlCommand.ExecuteReaderAsync(this.IsAutoClose() ? CommandBehavior.CloseConnection : CommandBehavior.Default);
@@ -669,7 +708,7 @@ namespace SqlSugar
                 if (this.ProcessingEventStartingSQL != null)
                     ExecuteProcessingSQL(ref sql,ref parameters);
                 ExecuteBefore(sql, parameters);
-                var sqlCommand = GetCommand(sql, parameters);
+                var sqlCommand = IsOpenAsync ? await GetCommandAsync(sql, parameters) : GetCommand(sql, parameters);
                 object scalar;
                 if(CancellationToken==null)
                     scalar=await sqlCommand.ExecuteScalarAsync();
@@ -1015,7 +1054,10 @@ namespace SqlSugar
             builder.SqlQueryBuilder.sql.Append(sql);
             if (parsmeterArray != null && parsmeterArray.Any())
                 builder.SqlQueryBuilder.Parameters.AddRange(parsmeterArray);
-            using (var dataReader = this.GetDataReader(builder.SqlQueryBuilder.ToSqlString(), builder.SqlQueryBuilder.Parameters.ToArray()))
+            string sqlString = builder.SqlQueryBuilder.ToSqlString();
+            SugarParameter[] Parameters = builder.SqlQueryBuilder.Parameters.ToArray();
+            this.GetDataBefore(sqlString, Parameters);
+            using (var dataReader = this.GetDataReader(sqlString, Parameters))
             {
                 DbDataReader DbReader = (DbDataReader)dataReader;
                 List<T> result = new List<T>();
@@ -1076,6 +1118,7 @@ namespace SqlSugar
                     }
                     this.Context.Ado.DataReaderParameters = null;
                 }
+                this.GetDataAfter(sqlString, Parameters);
                 return Tuple.Create<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>, List<T7>>(result, result2, result3, result4, result5, result6, result7);
             }
         }
@@ -1140,7 +1183,10 @@ namespace SqlSugar
             builder.SqlQueryBuilder.sql.Append(sql);
             if (parsmeterArray != null && parsmeterArray.Any())
                 builder.SqlQueryBuilder.Parameters.AddRange(parsmeterArray);
-            using (var dataReader = await this.GetDataReaderAsync(builder.SqlQueryBuilder.ToSqlString(), builder.SqlQueryBuilder.Parameters.ToArray()))
+            string sqlString = builder.SqlQueryBuilder.ToSqlString();
+            SugarParameter[] Parameters = builder.SqlQueryBuilder.Parameters.ToArray();
+            this.GetDataBefore(sqlString, Parameters);
+            using (var dataReader = await this.GetDataReaderAsync(sqlString, Parameters))
             {
                 DbDataReader DbReader = (DbDataReader)dataReader;
                 List<T> result = new List<T>();
@@ -1197,6 +1243,7 @@ namespace SqlSugar
                     }
                     this.Context.Ado.DataReaderParameters = null;
                 }
+                this.GetDataAfter(sqlString, Parameters);
                 return Tuple.Create<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>, List<T7>>(result, result2, result3, result4, result5, result6, result7);
             }
         }
@@ -1415,6 +1462,11 @@ namespace SqlSugar
         #endregion
 
         #region  Helper
+        public  virtual async Task<DbCommand> GetCommandAsync(string sql, SugarParameter[] parameters)
+        {
+            await Task.FromResult(0);
+            throw new NotImplementedException();
+        }
         public async Task CloseAsync()
         {
             if (this.Transaction != null)
@@ -1549,6 +1601,44 @@ namespace SqlSugar
                 this.IsClearParameters = this.OldClearParameters;
                 this.OldCommandType = 0;
                 this.OldClearParameters = false;
+            }
+        }
+        public virtual void GetDataBefore(string sql, SugarParameter[] parameters)
+        {
+            this.GetDataBeforeTime = DateTime.Now;
+            if (this.IsEnableLogEvent)
+            {
+                Action<string, SugarParameter[]> action = OnGetDataReadering;
+                if (action != null)
+                {
+                    if (parameters == null || parameters.Length == 0)
+                    {
+                        action(sql, new SugarParameter[] { });
+                    }
+                    else
+                    {
+                        action(sql, parameters);
+                    }
+                }
+            }
+        }
+        public virtual void GetDataAfter(string sql, SugarParameter[] parameters)
+        {
+            this.GetDataAfterTime = DateTime.Now;
+            if (this.IsEnableLogEvent)
+            {
+                Action<string, SugarParameter[], TimeSpan> action = OnGetDataReadered;
+                if (action != null)
+                {
+                    if (parameters == null || parameters.Length == 0)
+                    {
+                        action(sql, new SugarParameter[] { }, GetDataExecutionTime);
+                    }
+                    else
+                    {
+                        action(sql, parameters, GetDataExecutionTime);
+                    }
+                }
             }
         }
         public virtual SugarParameter[] GetParameters(object parameters, PropertyInfo[] propertyInfo = null)
