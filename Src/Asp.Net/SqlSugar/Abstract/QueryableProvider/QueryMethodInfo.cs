@@ -80,8 +80,8 @@ namespace SqlSugar
         }
         public QueryMethodInfo AddJoinInfo(Type joinEntityType, string shortName, string onWhere, JoinType type = JoinType.Left)
         {
-            var method = QueryableObj.GetType().GetMyMethod("AddJoinInfo", 4, typeof(string), typeof(string), typeof(string), typeof(JoinType));
-            this.QueryableObj = method.Invoke(QueryableObj, new object[] { this.Context.EntityMaintenance.GetTableName(joinEntityType), shortName, onWhere, type });
+            var method = QueryableObj.GetType().GetMyMethod("AddJoinInfo", 4, typeof(Type), typeof(string), typeof(string), typeof(JoinType));
+            this.QueryableObj = method.Invoke(QueryableObj, new object[] { joinEntityType, shortName, onWhere, type });
             return this;
         }
         public QueryMethodInfo GroupBy(List<GroupByModel> models) 
@@ -323,7 +323,12 @@ namespace SqlSugar
             var reslt = method.Invoke(QueryableObj, new object[] { });
             return Convert.ToBoolean(reslt);
         }
-
+        public int Count()
+        {
+            var method = QueryableObj.GetType().GetMyMethod("Count", 0);
+            var reslt = method.Invoke(QueryableObj, new object[] { });
+            return Convert.ToInt32(reslt);
+        }
         public object ToTree(string childPropertyName, string parentIdPropertyName, object rootValue, string primaryKeyPropertyName)
         {
             var method = QueryableObj.GetType().GetMyMethod("ToTree", 4,typeof(string),typeof(string),typeof(object),typeof(string));
@@ -378,6 +383,12 @@ namespace SqlSugar
             var method = QueryableObj.GetType().GetMyMethod("AnyAsync", 0);
             var reslt = method.Invoke(QueryableObj, new object[] { });
             return await (Task<bool>) reslt;
+        }
+        public async Task<int> CountAsync()
+        {
+            var method = QueryableObj.GetType().GetMyMethod("CountAsync", 0);
+            var reslt = method.Invoke(QueryableObj, new object[] { });
+            return await (Task<int>)reslt;
         }
         public async Task<object> InSingleAsync(object pkValue)
         {

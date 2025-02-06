@@ -1885,8 +1885,19 @@ namespace SqlSugar
             var entityType = typeof(TResult);
             bool isChangeQueryableSlave = GetIsSlaveQuery();
             bool isChangeQueryableMasterSlave = GetIsMasterQuery();
-            var dataReader = this.Db.GetDataReader(sqlObj.Key, sqlObj.Value.ToArray());
-            result = GetData<TResult>(isComplexModel, entityType, dataReader);
+            string sqlString = sqlObj.Key;
+            SugarParameter[] parameters = sqlObj.Value.ToArray();
+            var dataReader = this.Db.GetDataReader(sqlString, parameters);
+            this.Db.GetDataBefore(sqlString, parameters);
+            if (entityType.IsInterface)
+            {
+                result = GetData<TResult>(isComplexModel, this.QueryBuilder.AsType, dataReader);
+            }
+            else
+            {
+                result = GetData<TResult>(isComplexModel, entityType, dataReader);
+            }
+            this.Db.GetDataAfter(sqlString, parameters);
             RestChangeMasterQuery(isChangeQueryableMasterSlave);
             RestChangeSlaveQuery(isChangeQueryableSlave);
             return result;
@@ -1898,8 +1909,19 @@ namespace SqlSugar
             var entityType = typeof(TResult);
             bool isChangeQueryableSlave = GetIsSlaveQuery();
             bool isChangeQueryableMasterSlave = GetIsMasterQuery();
-            var dataReader = await this.Db.GetDataReaderAsync(sqlObj.Key, sqlObj.Value.ToArray());
-            result = await GetDataAsync<TResult>(isComplexModel, entityType, dataReader);
+            string sqlString = sqlObj.Key;
+            SugarParameter[] parameters = sqlObj.Value.ToArray();
+            var dataReader = await this.Db.GetDataReaderAsync(sqlString, parameters);
+            this.Db.GetDataBefore(sqlString, parameters);
+            if (entityType.IsInterface)
+            {
+                result =await GetDataAsync<TResult>(isComplexModel, this.QueryBuilder.AsType, dataReader);
+            }
+            else
+            {
+                result = await GetDataAsync<TResult>(isComplexModel, entityType, dataReader);
+            }
+            this.Db.GetDataAfter(sqlString, parameters);
             RestChangeMasterQuery(isChangeQueryableMasterSlave);
             RestChangeSlaveQuery(isChangeQueryableSlave);
             return result;
@@ -2102,6 +2124,7 @@ namespace SqlSugar
             asyncQueryableBuilder.JoinExpression = this.QueryBuilder.JoinExpression;
             asyncQueryableBuilder.WhereIndex = this.QueryBuilder.WhereIndex;
             asyncQueryableBuilder.HavingInfos = this.QueryBuilder.HavingInfos;
+            asyncQueryableBuilder.AsType = this.QueryBuilder.AsType;
             asyncQueryableBuilder.LambdaExpressions.ParameterIndex = this.QueryBuilder.LambdaExpressions.ParameterIndex;
             asyncQueryableBuilder.IgnoreColumns = this.Context.Utilities.TranslateCopy(this.QueryBuilder.IgnoreColumns);
             asyncQueryableBuilder.AsTables = this.Context.Utilities.TranslateCopy(this.QueryBuilder.AsTables);
