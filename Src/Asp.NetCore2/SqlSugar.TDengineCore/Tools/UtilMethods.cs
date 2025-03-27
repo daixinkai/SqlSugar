@@ -11,11 +11,21 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml.Serialization;
 
 namespace SqlSugar.TDengine
 {
     public class UtilMethods
     {
+        public static STableAttribute GetCommonSTableAttribute(ISqlSugarClient db,STableAttribute sTableAttribute)
+        {
+            var key = "GetCommonSTableAttribute_" + sTableAttribute?.STableName;
+            if (db.TempItems?.ContainsKey(key) == true) 
+            {
+                sTableAttribute.STableName = db.TempItems[key] +"";
+            }
+            return sTableAttribute!;
+        }
         public static long ToUnixTimestamp(DateTime dateTime)
         {
             // If the DateTime is Utc, use ToUnixTimeMilliseconds directly

@@ -211,19 +211,23 @@ namespace SqlSugar
         }
         public ISugarQueryable<T, T2> LeftJoinIF<T2>(bool isLeftJoin, Expression<Func<T, T2, bool>> joinExpression) 
         {
+            var oldAsName = this.QueryBuilder.AsTables?.ToDictionary(it=>it.Key,it=>it.Value); 
             var result = LeftJoin(joinExpression);
             if (isLeftJoin == false)
             {
                 result.QueryBuilder.JoinQueryInfos.Remove(result.QueryBuilder.JoinQueryInfos.Last());
+                result.QueryBuilder.AsTables = oldAsName;
             }
             return result;
         }
         public ISugarQueryable<T, T2> InnerJoinIF<T2>(bool isJoin, Expression<Func<T, T2, bool>> joinExpression)
         {
+            var oldAsName = this.QueryBuilder.AsTables?.ToDictionary(it => it.Key, it => it.Value);
             var result = InnerJoin(joinExpression);
             if (isJoin == false)
             {
                 result.QueryBuilder.JoinQueryInfos.Remove(result.QueryBuilder.JoinQueryInfos.Last());
+                result.QueryBuilder.AsTables = oldAsName;
             }
             return result;
         }
@@ -329,7 +333,7 @@ namespace SqlSugar
         }
         public ISugarQueryable<T> Clone()
         {
-            var queryable = this.Context.Queryable<object>().Select<T>().WithCacheIF(IsCache, CacheTime);
+            var queryable = this.Context.Queryable<object>().AsType(this.QueryBuilder.AsType).Select<T>().WithCacheIF(IsCache, CacheTime);
             CopyQueryBuilder(queryable.QueryBuilder);
             ((QueryableProvider<T>)queryable).CacheKey = this.CacheKey;
             ((QueryableProvider<T>)queryable).MapperAction = this.MapperAction;
@@ -359,8 +363,18 @@ namespace SqlSugar
             this.QueryBuilder.IsCrossQueryWithAttr = true;
             return this.AS(asName);
         }
+        public ISugarQueryable<Type> Cast<Type>() 
+        {
+            var selectValue = this.Clone().QueryBuilder.GetSelectValue;
+            return this.Select<Type>().Select(selectValue);
+        }
         public ISugarQueryable<T> AsType(Type tableNameType)
         {
+            if (tableNameType == null)
+            {
+                return this;
+            }
+            this.QueryBuilder.AsType = tableNameType;
             return AS(this.Context.EntityMaintenance.GetEntityInfo(tableNameType).DbTableName);
         }
         public virtual ISugarQueryable<T> With(string withString)
@@ -1495,6 +1509,11 @@ namespace SqlSugar
             }
             else if (this.QueryBuilder.EntityType == UtilConstants.ObjType || (this.QueryBuilder.AsTables != null && this.QueryBuilder.AsTables.Count == 1)||this.QueryBuilder.EntityName!=this.QueryBuilder.EntityType.Name) 
             {
+                if (typeof(TResult).IsInterface&&this.QueryBuilder.AsType==null) 
+                {
+                    Check.ExceptionEasy("Select< interface > requires a full example of AsType(type) db.Queryable<object>().AsType(type).Select<Interface>().ToList()"
+                        , "Select<接口>需要AsType(type)完整示例db.Queryable<object>().AsType(type).Select<Interface>().ToList()");
+                }
                 if (this.QueryBuilder.SelectValue.HasValue()&& this.QueryBuilder.SelectValue.ObjToString().Contains("AS"))
                 {
                     return this.Select<TResult>(this.QueryBuilder.SelectValue+"");
@@ -1520,6 +1539,13 @@ namespace SqlSugar
             }
             else
             {
+                if (typeof(TResult).IsInterface&& typeof(TResult).IsAssignableFrom(this.EntityInfo.Type))
+                {
+                    if (!this.QueryBuilder.AsTables.Any())
+                    {
+                        this.AsType(this.EntityInfo.Type);
+                    }
+                }
                 var selects = this.QueryBuilder.GetSelectValueByString();
                 if (selects.ObjToString().ToLower().IsContainsIn(".","("," as ")) 
                 {

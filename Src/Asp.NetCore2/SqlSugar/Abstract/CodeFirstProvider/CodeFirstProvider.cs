@@ -200,7 +200,7 @@ namespace SqlSugar
             var tempTableName = "TempDiff" + DateTime.Now.ToString("yyMMssHHmmssfff");
             var oldTableName = this.Context.EntityMaintenance.GetEntityInfo(type).DbTableName;
             var db = new SqlSugarProvider(UtilMethods.CopyConfig(this.Context.CurrentConnectionConfig));
-            UtilMethods.IsNullReturnNew(db.CurrentConnectionConfig.ConfigureExternalServices);
+            db.CurrentConnectionConfig.ConfigureExternalServices=UtilMethods.IsNullReturnNew(db.CurrentConnectionConfig.ConfigureExternalServices);
             db.CurrentConnectionConfig.ConfigureExternalServices.EntityNameService += (x, p) =>
             {
                 p.IsDisabledUpdateAll = true;//Disabled update
@@ -735,6 +735,10 @@ namespace SqlSugar
                 return false;
             }
             else if (ec.UnderType == UtilConstants.BoolType && dc.OracleDataType?.EqualCase("number")==true) 
+            {
+                return false;
+            }
+            else if (ec.UnderType == UtilConstants.LongType && dc.Length == 19 && dc.DecimalDigits == 0 && dc.OracleDataType?.EqualCase("number") == true)
             {
                 return false;
             }

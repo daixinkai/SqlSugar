@@ -45,6 +45,10 @@ namespace SqlSugar
             {
                 return new MySqlQueryable<T>();
             }
+            else if (currentConnectionConfig.DbType == DbType.Sqlite)
+            {
+                return new SqliteQueryable<T>();
+            }
             else if (currentConnectionConfig.DbType == DbType.PostgreSQL)
             {
                 return new PostgreSQLQueryable<T>();
@@ -431,6 +435,14 @@ namespace SqlSugar
             else if (type == "Custom")
             {
                 return CustomNamespace + "."+CustomDbName + name;
+            }
+            else if (type == "HANA")
+            {
+                return InstanceFactory.CustomDllName + "." + type + name;
+            }
+            else if (type == "DB2")
+            {
+                return "SqlSugar.DB2."+ type+ name;
             }
             else
             {

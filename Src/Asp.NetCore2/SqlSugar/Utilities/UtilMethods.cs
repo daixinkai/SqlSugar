@@ -601,10 +601,14 @@ namespace SqlSugar
                 {
                     var method = destinationType.GetMyMethod("Parse", 1);
                     if (method != null)
-                    { 
+                    {
                         var result = method.Invoke(null, new object[] { value });
-                        return result; 
+                        return result;
                     }
+                }
+                else if (value is byte[] bytes&&bytes.Length==1&& destinationType == typeof(char)) 
+                {
+                    return (char)(bytes)[0];
                 }
                 var destinationConverter = TypeDescriptor.GetConverter(destinationType);
                 if (destinationConverter != null && destinationConverter.CanConvertFrom(value.GetType()))
@@ -1580,6 +1584,7 @@ namespace SqlSugar
         }
         public static string GetSqlString(ConnectionConfig connectionConfig,KeyValuePair<string, List<SugarParameter>> sqlObj)
         {
+            var guid = Guid.NewGuid()+"";
             var result = sqlObj.Key;
             if (sqlObj.Value != null)
             {
@@ -1657,15 +1662,15 @@ namespace SqlSugar
                     }
                     else if (connectionConfig.MoreSettings?.DisableNvarchar == true || item.DbType == System.Data.DbType.AnsiString || connectionConfig.DbType == DbType.Sqlite)
                     {
-                        result = result.Replace(item.ParameterName, $"'{item.Value.ObjToString().ToSqlFilter()}'");
+                        result = result.Replace(item.ParameterName, $"'{item.Value.ObjToString().Replace("@",guid).ToSqlFilter()}'");
                     }
                     else
                     {
-                        result = result.Replace(item.ParameterName, $"N'{item.Value.ObjToString().ToSqlFilter()}'");
+                        result = result.Replace(item.ParameterName, $"N'{item.Value.ObjToString().Replace("@", guid).ToSqlFilter()}'");
                     }
                 }
             }
-
+            result = result.Replace(guid, "@");
             return result;
         }
         public static string ByteArrayToPostgreByteaLiteral(byte[] data)
@@ -1819,6 +1824,11 @@ namespace SqlSugar
                 return false;
             }
             return true;
+        }
+
+        internal static ConnMoreSettings GetMoreSetting(ExpressionContext context)
+        {
+            return context?.SugarContext?.Context?.CurrentConnectionConfig?.MoreSettings ?? new ConnMoreSettings();
         }
     }
 }

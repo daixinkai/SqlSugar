@@ -870,6 +870,10 @@ namespace SqlSugar
                         }
                         return result1;
                     case "GetDate":
+                        if (this.Context?.SugarContext?.Context?.CurrentConnectionConfig?.MoreSettings?.DatabaseModel == DbType.SqlServer) 
+                        {
+                            return "GetDate()";
+                        }
                         return this.Context.DbMehtods.GetDate();
                     case "GetRandom":
                         return this.Context.DbMehtods.GetRandom();
@@ -1033,8 +1037,32 @@ namespace SqlSugar
 
         private bool IsContainsArray(MethodCallExpression express, string methodName, bool isValidNativeMethod)
         {
+            if (isMemoryExtensionsContainsArray(express, methodName)) 
+            {
+                return true;
+            }
             return !isValidNativeMethod && express.Method.DeclaringType.Namespace.IsIn("System.Collections", "System.Linq", "System.Collections.Generic") && methodName == "Contains";
         }
+        private bool isMemoryExtensionsContainsArray(MethodCallExpression express, string methodName)
+        {
+            var isMemoryExtensionsContainsArray = false;
+            if (express.Method.DeclaringType.Name == "MemoryExtensions" && methodName == "Contains")
+            {
+                if (express.Arguments.Count() == 2)
+                {
+                    if (express.Arguments.First() is MethodCallExpression callExpression)
+                    {
+                        if (callExpression.Method.Name == "op_Implicit")
+                        {
+                            isMemoryExtensionsContainsArray = true;
+                        }
+                    }
+                }
+            }
+
+            return isMemoryExtensionsContainsArray;
+        }
+
         private bool IsSubMethod(MethodCallExpression express, string methodName)
         {
             return SubTools.SubItemsConst.Any(it => it.Name == methodName) && express.Object != null && (express.Object.Type.Name.StartsWith("Subqueryable`"));

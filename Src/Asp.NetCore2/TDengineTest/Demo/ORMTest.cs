@@ -27,22 +27,15 @@ namespace TDengineTest
                     {
                         Console.WriteLine(UtilMethods.GetNativeSql(sql, p));
                     }
-                },
-                ConfigureExternalServices = new ConfigureExternalServices()
-                {
-                     EntityService= (property, column) =>
-                     {
-                         if (column.SqlParameterDbType == null) 
-                         {
-                             column.SqlParameterDbType = typeof(CommonPropertyConvert);
-                         }
-                     }
-                }
+                } 
             });
 
-            //建表
+            //固定建表
             CodeFirst(db);
 
+            //自动建表
+            InsertUsingTag(db);
+             
             //生成实体
             DbFirst(db);
 

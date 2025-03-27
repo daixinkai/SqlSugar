@@ -4,11 +4,91 @@ using System.Data;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace SqlSugar.TDengine
 {
     public class TDengineCodeFirst : CodeFirstProvider
     {
+        protected override void Execute(Type entityType, EntityInfo entityInfo)
+        {
+            var attr =GetCommonSTableAttribute( entityInfo.Type.GetCustomAttribute<STableAttribute>());
+            if (attr?.STableName!=null&&attr?.Tag1!=null) 
+            {
+                entityInfo.DbTableName = attr.STableName;
+                Context.MappingTables.Add(entityInfo.EntityName, entityInfo.DbTableName);
+            }
+            //var entityInfo = this.Context.EntityMaintenance.GetEntityInfoNoCache(entityType);
+            if (entityInfo.Discrimator.HasValue())
+            {
+                Check.ExceptionEasy(!Regex.IsMatch(entityInfo.Discrimator, @"^(?:\w+:\w+)(?:,\w+:\w+)*$"), "The format should be type:cat for this type, and if there are multiple, it can be FieldName:cat,FieldName2:dog ", "格式错误应该是type:cat这种格式，如果是多个可以FieldName:cat,FieldName2:dog，不要有空格");
+                var array = entityInfo.Discrimator.Split(',');
+                foreach (var disItem in array)
+                {
+                    var name = disItem.Split(':').First();
+                    var value = disItem.Split(':').Last();
+                    entityInfo.Columns.Add(new EntityColumnInfo() { PropertyInfo = typeof(DiscriminatorObject).GetProperty(nameof(DiscriminatorObject.FieldName)), IsOnlyIgnoreUpdate = true, DbColumnName = name, UnderType = typeof(string), PropertyName = name, Length = 50 });
+                }
+            }
+            if (this.MappingTables.ContainsKey(entityType))
+            {
+                entityInfo.DbTableName = this.MappingTables[entityType];
+                this.Context.MappingTables.Add(entityInfo.EntityName, entityInfo.DbTableName);
+            }
+            if (this.DefultLength > 0)
+            {
+                foreach (var item in entityInfo.Columns)
+                {
+                    if (item.PropertyInfo.PropertyType == UtilConstants.StringType && item.DataType.IsNullOrEmpty() && item.Length == 0)
+                    {
+                        item.Length = DefultLength;
+                    }
+                    if (item.DataType != null && item.DataType.Contains(",") && !Regex.IsMatch(item.DataType, @"\d\,\d"))
+                    {
+                        var types = item.DataType.Split(',').Select(it => it.ToLower()).ToList();
+                        var mapingTypes = this.Context.Ado.DbBind.MappingTypes.Select(it => it.Key.ToLower()).ToList();
+                        var mappingType = types.FirstOrDefault(it => mapingTypes.Contains(it));
+                        if (mappingType != null)
+                        {
+                            item.DataType = mappingType;
+                        }
+                        if (item.DataType == "varcharmax")
+                        {
+                            item.DataType = "nvarchar(max)";
+                        }
+                    }
+                }
+            }
+            var tableName = GetTableName(entityInfo);
+            this.Context.MappingTables.Add(entityInfo.EntityName, tableName);
+            entityInfo.DbTableName = tableName;
+            entityInfo.Columns.ForEach(it => {
+                it.DbTableName = tableName;
+                if (it.UnderType?.Name == "DateOnly" && it.DataType == null)
+                {
+                    it.DataType = "Date";
+                }
+                if (it.UnderType?.Name == "TimeOnly" && it.DataType == null)
+                {
+                    it.DataType = "Time";
+                }
+            });
+            var isAny = this.Context.DbMaintenance.IsAnyTable(tableName, false);
+            if (isAny && entityInfo.IsDisabledUpdateAll)
+            {
+                return;
+            }
+            if (isAny)
+                ExistLogic(entityInfo);
+            else
+                NoExistLogic(entityInfo);
+
+            this.Context.DbMaintenance.AddRemark(entityInfo);
+            //this.Context.DbMaintenance.AddIndex(entityInfo);
+            //base.CreateIndex(entityInfo);
+            this.Context.DbMaintenance.AddDefaultValue(entityInfo);
+        }
+
         public override void ExistLogic(EntityInfo entityInfo)
         {
             if (entityInfo.Columns.HasValue() && entityInfo.IsDisabledUpdateAll == false)
@@ -18,7 +98,24 @@ namespace SqlSugar.TDengine
                 var tableName = GetTableName(entityInfo);
                 var dbColumns = this.Context.DbMaintenance.GetColumnInfosByTableName(tableName, false);
                 ConvertColumns(dbColumns);
+                var attr =GetCommonSTableAttribute( entityInfo.Type.GetCustomAttribute<STableAttribute>());
                 var entityColumns = entityInfo.Columns.Where(it => it.IsIgnore == false).ToList();
+                if (attr != null && attr.Tag1 != null)
+                {
+                    entityColumns = entityInfo.Columns.Where(it => it.IsIgnore == false
+                    || it.DbColumnName?.ToLower() == attr.Tag1?.ToLower()
+                     || it.DbColumnName?.ToLower() == attr.Tag2?.ToLower()
+                      || it.DbColumnName?.ToLower() == attr.Tag3?.ToLower()
+                       || it.DbColumnName?.ToLower() == attr.Tag4?.ToLower()
+                  ).ToList();
+                    foreach (var item in entityColumns)
+                    {
+                        if (item.DbColumnName == null) 
+                        {
+                            item.DbColumnName = item.PropertyName;
+                        }
+                    }
+                }
                 var dropColumns = dbColumns
                                           .Where(dc => !entityColumns.Any(ec => dc.DbColumnName.Equals(ec.OldDbColumnName, StringComparison.CurrentCultureIgnoreCase)))
                                           .Where(dc => !entityColumns.Any(ec => dc.DbColumnName.Equals(ec.DbColumnName, StringComparison.CurrentCultureIgnoreCase)))
@@ -125,11 +222,20 @@ namespace SqlSugar.TDengine
                 var addItem = EntityColumnToDbColumn(entityInfo, entityInfo.DbTableName, item);
                 dbColumns.Add(addItem);
             }
-            var attr = entityInfo.Type.GetCustomAttribute<STableAttribute>();
+            var attr =GetCommonSTableAttribute( entityInfo.Type.GetCustomAttribute<STableAttribute>());
             var oldTableName = entityInfo.DbTableName;
             if (attr != null) 
             {
                 entityInfo.DbTableName += ("{stable}"+this.Context.Utilities.SerializeObject(attr));
+            }
+            if (attr != null && attr.Tag1 != null)
+            {
+                dbColumns = dbColumns.Where(it =>
+                 it.DbColumnName?.ToLower() != attr.Tag1?.ToLower()
+                   && it.DbColumnName?.ToLower() != attr.Tag2?.ToLower()
+                   && it.DbColumnName?.ToLower() != attr.Tag3?.ToLower()
+                   && it.DbColumnName?.ToLower() != attr.Tag4?.ToLower()
+                ).ToList();
             }
             this.Context.DbMaintenance.CreateTable(entityInfo.DbTableName, dbColumns);
             entityInfo.DbTableName = oldTableName;
@@ -143,7 +249,11 @@ namespace SqlSugar.TDengine
             }
             return result;
         }
-      
+
+        private STableAttribute GetCommonSTableAttribute(STableAttribute sTableAttribute)
+        {
+            return SqlSugar.TDengine.UtilMethods.GetCommonSTableAttribute(this.Context, sTableAttribute);
+        }
         public string GetDatabaseTypeName(string typeName)
         {
             switch (typeName.ToLower())

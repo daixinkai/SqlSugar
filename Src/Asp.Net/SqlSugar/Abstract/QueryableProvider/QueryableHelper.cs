@@ -1731,6 +1731,8 @@ namespace SqlSugar
         }
         protected ISugarQueryable<T> _GroupBy(Expression expression)
         {
+            var oldParameterNames = this.QueryBuilder.Parameters?.Select(it => it.ParameterName)
+                ?.ToList();
             QueryBuilder.CheckExpression(expression, "GroupBy");
             LambdaExpression lambda = expression as LambdaExpression;
             expression = lambda.Body;
@@ -1761,7 +1763,19 @@ namespace SqlSugar
                 lamResult = QueryBuilder.GetExpressionValue(expression, isSingle ? ResolveExpressType.FieldSingle : ResolveExpressType.FieldMultiple);
                 result = lamResult.GetResultString(); 
             }
-            GroupBy(result);
+            if (oldParameterNames != null && this.Context.CurrentConnectionConfig.DbType == DbType.SqlServer)
+            {
+                var newParas = this.QueryBuilder.Parameters.Where(it => !oldParameterNames.Contains(it.ParameterName)).ToList();
+                this.QueryBuilder.GroupParameters = newParas;
+                var groupBySql = UtilMethods.GetSqlString(DbType.SqlServer, result, newParas.ToArray());
+                this.QueryBuilder.GroupBySql = groupBySql;
+                this.QueryBuilder.GroupBySqlOld = result;
+                GroupBy(result);
+            }
+            else
+            {
+                GroupBy(result);
+            }
             return this;
         }
         protected ISugarQueryable<T> _As(string tableName, string entityName)
@@ -1889,7 +1903,14 @@ namespace SqlSugar
             SugarParameter[] parameters = sqlObj.Value.ToArray();
             var dataReader = this.Db.GetDataReader(sqlString, parameters);
             this.Db.GetDataBefore(sqlString, parameters);
-            result = GetData<TResult>(isComplexModel, entityType, dataReader);
+            if (entityType.IsInterface)
+            {
+                result = GetData<TResult>(isComplexModel, this.QueryBuilder.AsType, dataReader);
+            }
+            else
+            {
+                result = GetData<TResult>(isComplexModel, entityType, dataReader);
+            }
             this.Db.GetDataAfter(sqlString, parameters);
             RestChangeMasterQuery(isChangeQueryableMasterSlave);
             RestChangeSlaveQuery(isChangeQueryableSlave);
@@ -1906,7 +1927,14 @@ namespace SqlSugar
             SugarParameter[] parameters = sqlObj.Value.ToArray();
             var dataReader = await this.Db.GetDataReaderAsync(sqlString, parameters);
             this.Db.GetDataBefore(sqlString, parameters);
-            result = await GetDataAsync<TResult>(isComplexModel, entityType, dataReader);
+            if (entityType.IsInterface)
+            {
+                result =await GetDataAsync<TResult>(isComplexModel, this.QueryBuilder.AsType, dataReader);
+            }
+            else
+            {
+                result = await GetDataAsync<TResult>(isComplexModel, entityType, dataReader);
+            }
             this.Db.GetDataAfter(sqlString, parameters);
             RestChangeMasterQuery(isChangeQueryableMasterSlave);
             RestChangeSlaveQuery(isChangeQueryableSlave);
@@ -2110,6 +2138,7 @@ namespace SqlSugar
             asyncQueryableBuilder.JoinExpression = this.QueryBuilder.JoinExpression;
             asyncQueryableBuilder.WhereIndex = this.QueryBuilder.WhereIndex;
             asyncQueryableBuilder.HavingInfos = this.QueryBuilder.HavingInfos;
+            asyncQueryableBuilder.AsType = this.QueryBuilder.AsType;
             asyncQueryableBuilder.LambdaExpressions.ParameterIndex = this.QueryBuilder.LambdaExpressions.ParameterIndex;
             asyncQueryableBuilder.IgnoreColumns = this.Context.Utilities.TranslateCopy(this.QueryBuilder.IgnoreColumns);
             asyncQueryableBuilder.AsTables = this.Context.Utilities.TranslateCopy(this.QueryBuilder.AsTables);
@@ -2127,6 +2156,9 @@ namespace SqlSugar
             asyncQueryableBuilder.Hints = this.QueryBuilder.Hints;
             asyncQueryableBuilder.MasterDbTableName = this.QueryBuilder.MasterDbTableName;
             asyncQueryableBuilder.IsParameterizedConstructor = this.QueryBuilder.IsParameterizedConstructor;
+            asyncQueryableBuilder.GroupParameters = this.QueryBuilder.GroupParameters;
+            asyncQueryableBuilder.GroupBySql = this.QueryBuilder.GroupBySql;
+            asyncQueryableBuilder.GroupBySqlOld = this.QueryBuilder.GroupBySqlOld;
             if (this.QueryBuilder.AppendNavInfo != null)
             {
                 asyncQueryableBuilder.AppendNavInfo = new AppendNavInfo() 

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace SqlSugar.TDengine
@@ -93,7 +94,7 @@ namespace SqlSugar.TDengine
         {
             get
             {
-                return "CREATE STABLE IF NOT EXISTS  {0}(\r\n{1} ) TAGS("+SqlBuilder.GetTranslationColumnName("TagsTypeId") +" VARCHAR(20))";
+                return "CREATE STABLE IF NOT EXISTS  {0}(\r\n{1} ) TAGS("+SqlBuilder.GetTranslationColumnName("TagsTypeId") +" VARCHAR(100))";
             }
         }
         protected override string CreateTableColumn
@@ -415,19 +416,33 @@ namespace SqlSugar.TDengine
             var childTableName = this.SqlBuilder.GetTranslationTableName(tableName.ToLower(isAutoToLowerCodeFirst));
             var stableName =  this.SqlBuilder.GetTranslationTableName("STable_"+tableName.ToLower(isAutoToLowerCodeFirst));
             var isAttr = tableName.Contains("{stable}");
+            var isTag1 = false;
             if (isAttr) 
             {
                 var attr = this.Context.Utilities.DeserializeObject<STableAttribute>(tableName.Split("{stable}").Last());
                 stableName= this.SqlBuilder.GetTranslationTableName(attr.STableName.ToLower(isAutoToLowerCodeFirst));
                 tableString = string.Format(this.CreateTableSql, stableName, string.Join(",\r\n", columnArray));
                 tableName=childTableName = this.SqlBuilder.GetTranslationTableName(tableName.Split("{stable}").First().ToLower(isAutoToLowerCodeFirst));
-                STable.Tags =this.Context.Utilities.DeserializeObject<List<ColumnTagInfo>>( attr.Tags);
+                if (attr.Tags == null && attr.Tag1 != null)
+                {
+                    isTag1 = true;
+                    STable.Tags = new List<ColumnTagInfo>() {
+                      new ColumnTagInfo(){ Name=attr.Tag1 },
+                      new ColumnTagInfo(){ Name=attr.Tag2 },
+                      new ColumnTagInfo(){ Name=attr.Tag3 },
+                      new ColumnTagInfo(){ Name=attr.Tag4 }
+                    }.Where(it=>it.Name.HasValue()).ToList();
+                }
+                else
+                {
+                    STable.Tags = this.Context.Utilities.DeserializeObject<List<ColumnTagInfo>>(attr.Tags);
+                }
             }
             if (STable.Tags?.Any() == true) 
             {
-                var colums = STable.Tags.Select(it => this.SqlBuilder.GetTranslationTableName(it.Name)+ "  VARCHAR(20) ");
+                var colums = STable.Tags.Select(it => this.SqlBuilder.GetTranslationTableName(it.Name)+ "  VARCHAR(100) ");
                 tableString=tableString.Replace(SqlBuilder.GetTranslationColumnName("TagsTypeId"), string.Join(",", colums));
-                tableString = tableString.Replace(" VARCHAR(20)  VARCHAR(20)", " VARCHAR(20)");
+                tableString = tableString.Replace(" VARCHAR(100)  VARCHAR(100)", " VARCHAR(100)");
             }
             this.Context.Ado.ExecuteCommand(tableString);
             var createChildSql = $"CREATE TABLE IF NOT EXISTS     {childTableName} USING {stableName} TAGS('default')";
@@ -436,7 +451,14 @@ namespace SqlSugar.TDengine
                 var colums = STable.Tags.Select(it => it.Value.ToSqlValue());
                 createChildSql = createChildSql.Replace("TAGS('default')", $"TAGS({string.Join(",", colums)})"); 
             }
-            this.Context.Ado.ExecuteCommand(createChildSql);
+            if (isTag1)
+            {
+                //No create child table
+            }
+            else
+            {
+                this.Context.Ado.ExecuteCommand(createChildSql);
+            }
             return tableString;
         }
         public override bool IsAnyConstraint(string constraintName)
@@ -447,6 +469,33 @@ namespace SqlSugar.TDengine
         {
             Check.ThrowNotSupportedException("PgSql BackupDataBase NotSupported");
             return false;
+        }
+        public override void AddDefaultValue(EntityInfo entityInfo)
+        {
+            var talbeName = entityInfo.DbTableName;
+            var attr = GetCommonSTableAttribute(entityInfo.Type.GetCustomAttribute<STableAttribute>());
+            if (attr?.Tag1 != null) 
+            {
+                talbeName = attr.STableName;
+            }
+            var dbColumns = this.GetColumnInfosByTableName(talbeName, false);
+            var db = this.Context;
+            var columns = entityInfo.Columns.Where(it => it.IsIgnore == false).ToList();
+            foreach (var item in columns)
+            {
+                if (item.DefaultValue.HasValue())
+                {
+                    if (!IsAnyDefaultValue(entityInfo.DbTableName, item.DbColumnName, dbColumns))
+                    {
+                        this.AddDefaultValue(entityInfo.DbTableName, item.DbColumnName, item.DefaultValue);
+                    }
+                }
+            }
+        }
+
+        private STableAttribute GetCommonSTableAttribute(STableAttribute sTableAttribute)
+        {
+            return SqlSugar.TDengine.UtilMethods.GetCommonSTableAttribute(this.Context, sTableAttribute);
         }
 
         public override List<DbColumnInfo> GetColumnInfosByTableName(string tableName, bool isCache = true)

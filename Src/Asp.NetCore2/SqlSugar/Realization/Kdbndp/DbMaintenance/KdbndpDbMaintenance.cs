@@ -54,7 +54,7 @@ namespace SqlSugar
                 {
                     sql = sql.Replace("sys_", "pg_");
                 }
-                else if (IsSqlServerModel()) 
+                else if (IsSqlServerModel())
                 {
 
                     sql = sql.Replace("sys_", "pg_");
@@ -66,6 +66,10 @@ namespace SqlSugar
                     sql = sql.Replace("case when pkey.colname = pcolumn.column_name", "case when pkey.colname::text = pcolumn.column_name::text");
                     sql = sql.Replace("pcolumn on pcolumn.table_name = ptables.tablename", "pcolumn on pcolumn.table_name::text = ptables.tablename::text ");
                     sql = sql.Replace("pkey on pcolumn.table_name = pkey.relname", "pkey on pcolumn.table_name::text = pkey.relname::text ");
+                }
+                else if (IsMySql()) 
+                { 
+                    sql = sql.Replace("pcolumn.udt_name", "pcolumn.data_type");
                 }
                 return sql;
             }
@@ -80,9 +84,15 @@ namespace SqlSugar
                         cast(obj_description(relfilenode,'pg_class') as varchar) as Description from pg_class c 
                         where  relkind = 'r' and  c.oid >= 16384 and c.relnamespace != 99 and c.relname not like '%pl_profiler_saved%' order by relname";
                 }
-                return @"select cast(relname as varchar) as Name,
+                var result= @"select cast(relname as varchar) as Name,
                         cast(obj_description(relfilenode,'pg_class') as varchar) as Description from sys_class c 
                         where  relkind = 'r' and  c.oid >= 16384 and c.relnamespace != 99 and c.relname not like '%pl_profiler_saved%' order by relname";
+
+                if (IsSqlServerModel()) 
+                {
+                    result = result.Replace(" as varchar)", " as varchar(max))");
+                }
+                return result;
             }
         }
         protected override string GetViewInfoListSql
@@ -113,13 +123,17 @@ namespace SqlSugar
         {
             get
             {
+                if (IsSqlServerModel()) 
+                {
+                    return "ALTER TABLE {0} ADD  {1} {2}{3} {4} {5} {6}";
+                }
                 return "ALTER TABLE {0} ADD COLUMN {1} {2}{3} {4} {5} {6}";
             }
         }
         protected override string AlterColumnToTableSql
         {
             get
-            {
+            { 
                 return "alter table {0} ALTER COLUMN {1} {2}{3} {4} {5} {6}";
             }
         }
@@ -211,6 +225,10 @@ namespace SqlSugar
         {
             get
             {
+                if (IsSqlServerModel()) 
+                {
+                    return "ALTER TABLE {0} ALTER {1} SET DEFAULT {2}";
+                }
                 return "ALTER TABLE {0} ALTER COLUMN {1} SET DEFAULT {2}";
             }
         }
@@ -369,6 +387,15 @@ WHERE tgrelid = '" + tableName + "'::regclass");
         }
         public override bool UpdateColumn(string tableName, DbColumnInfo columnInfo)
         {
+            if (IsSqlServerModel())
+            {
+                if (columnInfo.DataType.EqualCase("uuid"))
+                {
+                    columnInfo.DataType = "uniqueidentifier";
+                    columnInfo.Length = 0;
+                    columnInfo.Scale = 0;
+                }
+            }
 
             ConvertCreateColumnInfo(columnInfo);
             tableName = this.SqlBuilder.GetTranslationTableName(tableName);
@@ -484,6 +511,19 @@ WHERE tgrelid = '" + tableName + "'::regclass");
                 db.DbMaintenance.AddTableRemark(SqlBuilder.GetTranslationColumnName(entity.DbTableName), entity.TableDescription);
             }
             return true;
+        }
+        public override bool AddColumn(string tableName, DbColumnInfo columnInfo)
+        {
+            if (IsSqlServerModel()) 
+            {
+                if (columnInfo.DataType.EqualCase("uuid")) 
+                {
+                    columnInfo.DataType = "uniqueidentifier";
+                    columnInfo.Length = 0;
+                    columnInfo.Scale = 0;
+                }
+            }
+            return base.AddColumn(tableName, columnInfo);
         }
         public override bool RenameTable(string oldTableName, string newTableName)
         {
@@ -639,7 +679,7 @@ WHERE tgrelid = '" + tableName + "'::regclass");
                 }
             }
         }
-        private static void ConvertCreateColumnInfo(DbColumnInfo x)
+        private  void ConvertCreateColumnInfo(DbColumnInfo x)
         {
             string[] array = new string[] { "int4", "text", "int2", "int8", "date", "bit", "text", "timestamp" };
 
@@ -647,6 +687,16 @@ WHERE tgrelid = '" + tableName + "'::regclass");
             {
                 x.Length = 0;
                 x.DecimalDigits = 0;
+            }
+
+            if (IsSqlServerModel())
+            {
+                if (x.DataType.EqualCase("int8"))
+                {
+                    x.DataType = "bigint";
+                    x.Length = 0;
+                    x.Scale = 0;
+                }
             }
         }
         private bool IsPgModel()
@@ -656,6 +706,10 @@ WHERE tgrelid = '" + tableName + "'::regclass");
         private bool IsSqlServerModel()
         {
             return this.Context.CurrentConnectionConfig?.MoreSettings?.DatabaseModel == DbType.SqlServer;
+        }
+        private bool IsMySql()
+        {
+            return this.Context.CurrentConnectionConfig?.MoreSettings?.DatabaseModel == DbType.MySql;
         }
         #endregion
     }
