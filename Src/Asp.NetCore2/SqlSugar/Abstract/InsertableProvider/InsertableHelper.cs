@@ -683,10 +683,10 @@ namespace SqlSugar
                     this.Context.Ado.CommitTran();
                     return result;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     this.Context.Ado.RollbackTran();
-                    throw ex;
+                    throw;
                 }
             }
         }

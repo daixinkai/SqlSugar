@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations; 
@@ -102,7 +103,7 @@ namespace tech.fuhong.mes.basis.entity
         /// <summary>
         /// 两个对象是否相等
         /// </summary>
-        public override bool Equals(Object obj)
+        public override bool Equals(Object? obj)
         {
             if (Id == null || obj == null || !(obj is ProductProcessUnit))
             {

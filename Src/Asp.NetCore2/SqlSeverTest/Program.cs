@@ -10,24 +10,24 @@ namespace OrmTest
         { 
             //Each example will automatically create a table and can run independently.
             //每个例子都会自动建表 并且可以独立运行   
-            _1_CodeFirst.Init();
-            _2_DbFirst.Init();
-            _3_EasyQuery.Init();
-            _4_JoinQuery.Init();
-            _4_Subquery.Init();
-            _5_PageQuery.Init();
-            _6_NavQuery.Init();
-            _7_GroupQuery.Init();
-            _8_Insert.Init();
+            //_1_CodeFirst.Init();
+            //_2_DbFirst.Init();
+            //_3_EasyQuery.Init();
+            //_4_JoinQuery.Init();
+            //_4_Subquery.Init();
+            //_5_PageQuery.Init();
+            //_6_NavQuery.Init();
+            //_7_GroupQuery.Init();
+            //_8_Insert.Init();
             _9_Update.Init();
-            _a1_Delete.Init();
-            _a2_Sql.Init();
-            _a3_Merge.Init(); 
-            _a4_SplitTable.Init();
-            _a5_GridSave.Init();
-            _a6_SqlPage.Init();
-            _a7_JsonType.Init();
-            _a8_SelectReturnType.Init();
+            //_a1_Delete.Init();
+            //_a2_Sql.Init();
+            //_a3_Merge.Init(); 
+            //_a4_SplitTable.Init();
+            //_a5_GridSave.Init();
+            //_a6_SqlPage.Init();
+            //_a7_JsonType.Init();
+            //_a8_SelectReturnType.Init();
         }
     }
 
@@ -41,7 +41,7 @@ namespace OrmTest
         /// Database connection string
         /// 数据库连接字符串
         /// </summary>
-        public readonly static string Connection = "server=.;uid=sa;pwd=sasa;database=SqlSugar5Demo;Encrypt=True;TrustServerCertificate=True";
+        public readonly static string Connection = "Data Source=localhost;Port=3306;User ID=root;Password=daixinkai; Initial Catalog=sqlsugar_test;Charset=utf8; SslMode=none;Min pool size=1";
 
         /// <summary>
         /// Get a new SqlSugarClient instance with specific configurations
@@ -53,7 +53,7 @@ namespace OrmTest
             var db = new SqlSugarClient(new ConnectionConfig()
             {
                 IsAutoCloseConnection = true,
-                DbType = DbType.SqlServer,
+                DbType = DbType.MySql,
                 ConnectionString = Connection,
                 LanguageType=LanguageType.Default//Set language
 

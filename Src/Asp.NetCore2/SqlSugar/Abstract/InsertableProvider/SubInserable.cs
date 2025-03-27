@@ -107,11 +107,11 @@ namespace SqlSugar
                     this.Context.Ado.CommitTran();
                 return result;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 if (isNoTrean)
                     this.Context.Ado.RollbackTran();
-                throw ex;
+                throw;
             }
         }
 

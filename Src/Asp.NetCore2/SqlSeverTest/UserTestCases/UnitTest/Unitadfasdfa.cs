@@ -90,7 +90,7 @@ namespace OrmTest
             }
             var sq2 = db.QueryableWithAttr<KingJsonTest>()
                    .LeftJoin<KingTree>((t, j) => t.Id == j.Id)
-                   .Where((t, j) => t.CreateTime == null || j.ParentId == 1)
+                   .Where((t, j) => /*t.CreateTime == null ||*/ j.ParentId == 1)
                    .Select((t, j) => new KingOutPut() { }, true)
                    .ToSqlString();
             var sql3 = "SELECT \"T\".\"CREATE_TIME\" AS \"CREATETIME\" ,\"J\".\"PARENTID\" AS \"PARENTID\" FROM \"KING_JSON_TEST\" \"T\" Left JOIN HGT.\"KINGTREE\" \"J\" ON ( \"T\".\"ID\" = \"J\".\"ID\" )   WHERE (( \"T\".\"CREATE_TIME\" IS NULL ) OR ( \"J\".\"PARENTID\" = 1 ))";

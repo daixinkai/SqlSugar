@@ -31,10 +31,10 @@ namespace SqlSugar
             {
                 bulkCopy.WriteToServer(dt);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 CloseDb();
-                throw ex;
+                throw;
             }
             CloseDb();
             return DbColumnInfoList.Count;
@@ -56,10 +56,10 @@ namespace SqlSugar
                 bulkCopy.WriteToServer(dt);
                 await Task.Delay(0);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 CloseDb();
-                throw ex;
+                throw;
             }
             CloseDb();
             return DbColumnInfoList.Count;

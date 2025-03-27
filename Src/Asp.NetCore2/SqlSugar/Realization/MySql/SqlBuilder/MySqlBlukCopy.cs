@@ -96,9 +96,9 @@ namespace SqlSugar
                     File.Delete(fileName);
                 }
             }
-            catch (MySqlException ex)
+            catch (MySqlException)
             {
-                throw ex;
+                throw;
             }
             finally
             {

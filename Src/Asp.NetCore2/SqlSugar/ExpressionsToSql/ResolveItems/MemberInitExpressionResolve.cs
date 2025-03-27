@@ -62,7 +62,7 @@ namespace SqlSugar
                     if (customAttribute?.IsJson ?? false)
                     {
                         var paramterValue = ExpressionTool.DynamicInvoke(item);
-                        var parameterName = AppendParameter(new SerializeService().SerializeObject(paramterValue));
+                        var parameterName = AppendParameter(DefaultServices.Serialize.SerializeObject(paramterValue));
                         var parameterObj = this.Context.Parameters.FirstOrDefault(it => it.ParameterName == parameterName);
                         if (parameterObj != null) 
                         {

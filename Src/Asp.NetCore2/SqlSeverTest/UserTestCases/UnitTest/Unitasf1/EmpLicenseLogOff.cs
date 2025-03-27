@@ -1,4 +1,5 @@
-﻿using SqlSugar;
+﻿#nullable enable
+using SqlSugar;
 using SqlSugar.Extensions;
 using System;
 

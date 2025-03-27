@@ -257,7 +257,7 @@ namespace OrmTest
             })
             .ToList();
             }
-            catch (Exception e)
+            catch (Exception)
             {
 
                 throw;

@@ -111,9 +111,9 @@ WHEN NOT MATCHED THEN
                 copy.DestinationTableName = dt.TableName;
                 copy.WriteToServer(dt);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally
             {
