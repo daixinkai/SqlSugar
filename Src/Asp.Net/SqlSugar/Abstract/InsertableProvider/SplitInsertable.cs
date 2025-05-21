@@ -15,6 +15,7 @@ namespace SqlSugar
         public SplitType SplitType;
         internal IInsertable<T> Inserable { get;  set; }
         internal List<KeyValuePair<string,object>> TableNames { get;  set; }
+        internal bool MySqlIgnore { get; set; }
 
         public int ExecuteCommand()
         {
@@ -129,13 +130,17 @@ namespace SqlSugar
             foreach (var item in groups)
             {
                 var list = item.Select(it => it.Value as T).ToList();
+                var dataEvent = this.Context.CurrentConnectionConfig.AopEvents?.DataExecuting;
+                this.Context.Aop.DataExecuting = null;
                 var groupInserable = (InsertableProvider<T>)this.Context.Insertable<T>(list);
+                this.Context.Aop.DataExecuting = dataEvent;
                 groupInserable.InsertBuilder.TableWithString = parent.InsertBuilder.TableWithString;
                 groupInserable.RemoveCacheFunc = parent.RemoveCacheFunc;
                 groupInserable.diffModel = parent.diffModel;
                 groupInserable.IsEnableDiffLogEvent = parent.IsEnableDiffLogEvent;
                 groupInserable.InsertBuilder.IsNoInsertNull = parent.InsertBuilder.IsNoInsertNull;
                 groupInserable.IsOffIdentity = parent.IsOffIdentity;
+                groupInserable.InsertBuilder.MySqlIgnore = this.MySqlIgnore;
                 result += groupInserable.AS(item.Key).InsertColumns(names.ToArray()).ExecuteCommand();
             }
             return result;
@@ -150,13 +155,17 @@ namespace SqlSugar
             foreach (var item in groups)
             {
                 var list = item.Select(it => it.Value as T).ToList();
+                var dataEvent = this.Context.CurrentConnectionConfig.AopEvents?.DataExecuting;
+                this.Context.Aop.DataExecuting = null;
                 var groupInserable = (InsertableProvider<T>)this.Context.Insertable<T>(list);
+                this.Context.Aop.DataExecuting = dataEvent;
                 groupInserable.InsertBuilder.TableWithString = parent.InsertBuilder.TableWithString;
                 groupInserable.RemoveCacheFunc = parent.RemoveCacheFunc;
                 groupInserable.diffModel = parent.diffModel;
                 groupInserable.IsEnableDiffLogEvent = parent.IsEnableDiffLogEvent;
                 groupInserable.InsertBuilder.IsNoInsertNull = parent.InsertBuilder.IsNoInsertNull;
-                groupInserable.IsOffIdentity = parent.IsOffIdentity;
+                groupInserable.IsOffIdentity = parent.IsOffIdentity; 
+                groupInserable.InsertBuilder.MySqlIgnore = this.MySqlIgnore;
                 result +=await groupInserable.AS(item.Key).InsertColumns(names.ToArray()).ExecuteCommandAsync();
             }
             return result;
@@ -179,6 +188,7 @@ namespace SqlSugar
                 groupInserable.IsEnableDiffLogEvent = parent.IsEnableDiffLogEvent;
                 groupInserable.InsertBuilder.IsNoInsertNull = parent.InsertBuilder.IsNoInsertNull;
                 groupInserable.IsOffIdentity = parent.IsOffIdentity;
+                groupInserable.InsertBuilder.MySqlIgnore = this.MySqlIgnore;
                 var idList= groupInserable.AS(item.Key).InsertColumns(names.ToArray()).ExecuteReturnSnowflakeIdList();
                 result.AddRange(idList);
             }
@@ -201,6 +211,7 @@ namespace SqlSugar
                 groupInserable.IsEnableDiffLogEvent = parent.IsEnableDiffLogEvent;
                 groupInserable.InsertBuilder.IsNoInsertNull = parent.InsertBuilder.IsNoInsertNull;
                 groupInserable.IsOffIdentity = parent.IsOffIdentity;
+                groupInserable.InsertBuilder.MySqlIgnore = this.MySqlIgnore;
                 var idList =await groupInserable.AS(item.Key).InsertColumns(names.ToArray()).ExecuteReturnSnowflakeIdListAsync();
                 result.AddRange(idList);
             }

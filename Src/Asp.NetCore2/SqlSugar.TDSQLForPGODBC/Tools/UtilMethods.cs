@@ -18,6 +18,66 @@ namespace SqlSugar.TDSQLForPGODBC
 {
     public class UtilMethods
     {
+        public static string EscapeLikeValue(ISqlSugarClient db, string value, char wildcard = '%')
+        {
+            var dbType = db.CurrentConnectionConfig.DbType;
+            if (db.CurrentConnectionConfig?.MoreSettings?.DatabaseModel != null)
+            {
+                dbType = db.CurrentConnectionConfig.MoreSettings.DatabaseModel.Value;
+            }
+            if (string.IsNullOrEmpty(value))
+                return value;
+
+            string wildcardStr = wildcard.ToString();
+
+            switch (dbType)
+            {
+                // 支持标准 SQL LIKE 转义，通常使用中括号 [] 或反斜杠 \ 进行转义
+                case DbType.SqlServer:
+                case DbType.Access:
+                case DbType.Odbc:
+                case DbType.TDSQLForPGODBC:
+                    // SQL Server 使用中括号转义 %, _ 等
+                    value = value.Replace("[", "[[]")
+                                 .Replace("]", "[]]")
+                                 .Replace(wildcardStr, $"[{wildcard}]");
+                    break;
+
+                // PostgreSQL 风格数据库，使用反斜杠进行 LIKE 转义
+                case DbType.PostgreSQL:
+                case DbType.OpenGauss:
+                case DbType.TDSQL:
+                case DbType.GaussDB:
+                case DbType.GaussDBNative:
+                // MySQL 和兼容库，使用反斜杠进行转义
+                case DbType.MySql:
+                case DbType.MySqlConnector:
+                case DbType.Tidb:
+                case DbType.PolarDB:
+                case DbType.OceanBase:
+                case DbType.Oracle:
+                case DbType.OceanBaseForOracle:
+                case DbType.HG:
+                case DbType.Dm:
+                case DbType.GBase:
+                case DbType.DB2:
+                case DbType.HANA:
+                case DbType.GoldenDB:
+                case DbType.Sqlite:
+                case DbType.DuckDB:
+                case DbType.QuestDB:
+                case DbType.Doris:
+                case DbType.Xugu:
+                case DbType.Vastbase:
+                default:
+                    value = value
+                                 .Replace(wildcardStr, "\\\\" + wildcard);
+                    break;
+            }
+
+            return value;
+        }
+
 
         public static List<SugarParameter> CopySugarParameters(List<SugarParameter> pars)
         {
@@ -193,6 +253,14 @@ namespace SqlSugar.TDSQLForPGODBC
             var p = ParameterConverter.Invoke(obj, new object[] { value, 100 + index }) as SugarParameter;
             return p;
         }
+        internal static object QueryConverter(int index, ISqlSugarClient db, IDataReader dataReader, EntityInfo entity, EntityColumnInfo columnInfo)
+        {
+            var type = columnInfo.SqlParameterDbType as Type;
+            var ParameterConverter = type.GetMethod("QueryConverter").MakeGenericMethod(columnInfo.PropertyInfo.PropertyType);
+            var obj = Activator.CreateInstance(type);
+            var p = ParameterConverter.Invoke(obj, new object[] { dataReader, index });
+            return p;
+        }
         internal static bool IsErrorParameterName(ConnectionConfig connectionConfig, DbColumnInfo columnInfo)
         {
             return connectionConfig.MoreSettings?.IsCorrectErrorSqlParameterName == true &&
@@ -253,7 +321,71 @@ namespace SqlSugar.TDSQLForPGODBC
             value = value.TrimEnd(' ').TrimEnd('1').TrimEnd('=');
             return value;
         }
+        /// <summary>
+        /// Available only in Select,Handles logic that cannot be completed by an expression
+        /// </summary>
+        /// <param name="addValue"></param>
+        /// <param name="valueFomatInfo"></param>
+        /// <returns></returns>
+        internal static object GetFormatValue(object addValue, QueryableFormat valueFomatInfo)
+        {
+            if (valueFomatInfo.MethodName == "ToString")
+            {
+                if (valueFomatInfo.Type == UtilConstants.GuidType)
+                {
+                    addValue = Guid.Parse(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.Type == UtilConstants.ByteType)
+                {
+                    addValue = Convert.ToByte(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.Type == UtilConstants.IntType)
+                {
+                    addValue = Convert.ToInt32(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.Type == UtilConstants.LongType)
+                {
+                    addValue = Convert.ToInt64(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.Type == UtilConstants.UIntType)
+                {
+                    addValue = Convert.ToUInt32(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.Type == UtilConstants.ULongType)
+                {
+                    addValue = Convert.ToUInt64(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.Type == UtilConstants.DecType)
+                {
+                    addValue = Convert.ToDecimal(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.Type == UtilConstants.DobType)
+                {
+                    addValue = Convert.ToDouble(addValue + "").ToString(valueFomatInfo.Format);
+                }
+                else if (valueFomatInfo.TypeString == "Enum")
+                {
+                    addValue = ChangeType2(addValue, valueFomatInfo.Type)?.ToString();
+                }
+            }
+            else if (valueFomatInfo.MethodName == "OnlyInSelectConvertToString")
+            {
 
+                var methodInfo = valueFomatInfo.MethodInfo;
+                if (methodInfo != null)
+                {
+                    // 如果方法是静态的，传递null作为第一个参数，否则传递类的实例
+                    object instance = methodInfo.IsStatic ? null : Activator.CreateInstance(methodInfo.ReflectedType);
+
+                    // 创建一个包含参数值的object数组
+                    object[] parameters = new object[] { addValue };
+
+                    // 调用方法
+                    addValue = methodInfo.Invoke(instance, parameters);
+                }
+            }
+            return addValue;
+        }
         public static int CountSubstringOccurrences(string mainString, string searchString)
         {
             string[] substrings = mainString.Split(new string[] { searchString }, StringSplitOptions.None);
@@ -542,6 +674,18 @@ namespace SqlSugar.TDSQLForPGODBC
                         return result;
                     }
                 }
+                else if (value is byte[] bytes && bytes.Length == 1 && destinationType == typeof(char))
+                {
+                    return (char)(bytes)[0];
+                }
+                else if (value is DateTime && destinationType == typeof(TimeSpan))
+                {
+                    value = Convert.ToDateTime(value).TimeOfDay;
+                }
+                else if (value is DateTime && destinationType.FullName == "System.TimeOnly")
+                {
+                    value = Convert.ToDateTime(value).TimeOfDay;
+                }
                 var destinationConverter = TypeDescriptor.GetConverter(destinationType);
                 if (destinationConverter != null && destinationConverter.CanConvertFrom(value.GetType()))
                     return destinationConverter.ConvertFrom(null, culture, value);
@@ -654,7 +798,8 @@ namespace SqlSugar.TDSQLForPGODBC
                     DisableQueryWhereColumnRemoveTrim = it.MoreSettings.DisableQueryWhereColumnRemoveTrim,
                     DatabaseModel = it.MoreSettings.DatabaseModel,
                     EnableILike = it.MoreSettings.EnableILike,
-                    ClickHouseEnableFinal = it.MoreSettings.ClickHouseEnableFinal
+                    ClickHouseEnableFinal = it.MoreSettings.ClickHouseEnableFinal,
+                    PgSqlIsAutoToLowerSchema = it.MoreSettings.PgSqlIsAutoToLowerSchema
 
                 },
                 SqlMiddle = it.SqlMiddle == null ? null : new SqlMiddle
@@ -1336,6 +1481,14 @@ namespace SqlSugar.TDSQLForPGODBC
             {
                 return Convert.ToInt64(item.FieldValue);
             }
+            else if (item.CSharpTypeName.EqualCase("float"))
+            {
+                return Convert.ToSingle(item.FieldValue);
+            }
+            else if (item.CSharpTypeName.EqualCase("single"))
+            {
+                return Convert.ToSingle(item.FieldValue);
+            }
             else if (item.CSharpTypeName.EqualCase("short"))
             {
                 return Convert.ToInt16(item.FieldValue);
@@ -1511,10 +1664,11 @@ namespace SqlSugar.TDSQLForPGODBC
         }
         public static string GetSqlString(ConnectionConfig connectionConfig, KeyValuePair<string, List<SugarParameter>> sqlObj)
         {
+            var guid = Guid.NewGuid() + "";
             var result = sqlObj.Key;
             if (sqlObj.Value != null)
             {
-                foreach (var item in sqlObj.Value.OrderByDescending(it => it.ParameterName.Length))
+                foreach (var item in UtilMethods.CopySugarParameters(sqlObj.Value).OrderByDescending(it => it.ParameterName.Length))
                 {
                     if (item.ParameterName.StartsWith(":") && !result.Contains(item.ParameterName))
                     {
@@ -1580,23 +1734,23 @@ namespace SqlSugar.TDSQLForPGODBC
                             result = result.Replace(item.ParameterName, (Convert.ToBoolean(item.Value) ? 1 : 0) + "");
                         }
                     }
-                    else if (item.Value.GetType() != UtilConstants.StringType && connectionConfig.DbType == DbType.PostgreSQL && TDSQLForPGODBCDbBind.MappingTypesConst.Any(x => x.Value.ToString().EqualCase(item.Value.GetType().Name)))
+                    else if (item.Value.GetType() != UtilConstants.StringType && connectionConfig.DbType == DbType.PostgreSQL && PostgreSQLDbBind.MappingTypesConst.Any(x => x.Value.ToString().EqualCase(item.Value.GetType().Name)))
                     {
-                        var type = TDSQLForPGODBCDbBind.MappingTypesConst.First(x => x.Value.ToString().EqualCase(item.Value.GetType().Name)).Key;
+                        var type = PostgreSQLDbBind.MappingTypesConst.First(x => x.Value.ToString().EqualCase(item.Value.GetType().Name)).Key;
                         var replaceValue = string.Format("CAST('{0}' AS {1})", item.Value, type);
                         result = result.Replace(item.ParameterName, replaceValue);
                     }
                     else if (connectionConfig.MoreSettings?.DisableNvarchar == true || item.DbType == System.Data.DbType.AnsiString || connectionConfig.DbType == DbType.Sqlite)
                     {
-                        result = result.Replace(item.ParameterName, $"'{item.Value.ObjToString().ToSqlFilter()}'");
+                        result = result.Replace(item.ParameterName, $"'{item.Value.ObjToString().Replace("@", guid).ToSqlFilter()}'");
                     }
                     else
                     {
-                        result = result.Replace(item.ParameterName, $"N'{item.Value.ObjToString().ToSqlFilter()}'");
+                        result = result.Replace(item.ParameterName, $"N'{item.Value.ObjToString().Replace("@", guid).ToSqlFilter()}'");
                     }
                 }
             }
-
+            result = result.Replace(guid, "@");
             return result;
         }
         public static string ByteArrayToPostgreByteaLiteral(byte[] data)
@@ -1750,6 +1904,11 @@ namespace SqlSugar.TDSQLForPGODBC
                 return false;
             }
             return true;
+        }
+
+        internal static ConnMoreSettings GetMoreSetting(ExpressionContext context)
+        {
+            return context?.SugarContext?.Context?.CurrentConnectionConfig?.MoreSettings ?? new ConnMoreSettings();
         }
     }
 }

@@ -121,6 +121,10 @@ namespace SqlSugar
                 if (columnInfo != null && columnInfo.PropertyInfo.GetSetMethod(true) != null)
                 {
                     var isGemo = columnInfo.PropertyInfo?.PropertyType?.FullName=="NetTopologySuite.Geometries.Geometry";
+                    if (isGemo == false && columnInfo.PropertyInfo?.PropertyType?.FullName == "Kdbndp.LegacyPostgis.PostgisGeometry") 
+                    {
+                        isGemo = true;
+                    }
                     if (!isGemo&&columnInfo.PropertyInfo.PropertyType.IsClass() && columnInfo.PropertyInfo.PropertyType != UtilConstants.ByteArrayType && columnInfo.PropertyInfo.PropertyType != UtilConstants.ObjType)
                     {
                         if (this.ReaderKeys.Any(it => it.Equals(fileName, StringComparison.CurrentCultureIgnoreCase)))
@@ -296,6 +300,21 @@ namespace SqlSugar
             validPropertyName = validPropertyName == "byte[]" ? "byteArray" : validPropertyName;
             CSharpDataType validPropertyType = (CSharpDataType)Enum.Parse(typeof(CSharpDataType), validPropertyName);
 
+            #region NoSql
+            if (this.Context.Ado is AdoProvider provider) 
+            {
+                if (provider.IsNoSql) 
+                {
+                    method = isNullableType ? getOtherNull.MakeGenericMethod(bindPropertyType) : getOther.MakeGenericMethod(bindPropertyType);
+                    if (method.IsVirtual)
+                        generator.Emit(OpCodes.Callvirt, method);
+                    else
+                        generator.Emit(OpCodes.Call, method);
+                    return;
+                }
+            }
+            #endregion
+
             #region Sqlite Logic
             if (this.Context.CurrentConnectionConfig.DbType == DbType.Sqlite)
             {
@@ -363,6 +382,8 @@ namespace SqlSugar
                         method = null;
                     if (bindPropertyType ==UtilConstants.IntType&& this.Context.CurrentConnectionConfig.DbType == DbType.OceanBaseForOracle) 
                         method = isNullableType ? getMyIntNull : getMyInt;
+                    if (bindProperyTypeName == "int16")
+                        method = null;
                     break;
                 case CSharpDataType.@bool:
                     if (bindProperyTypeName == "bool" || bindProperyTypeName == "boolean")

@@ -965,6 +965,11 @@ namespace SqlSugar
             {
                 result = "*";
             }
+            if (result.StartsWith(UtilConstants.GroupReplaceKey)) 
+            {
+                this.GroupByIsReplace = true;
+                result = result.Replace(UtilConstants.GroupReplaceKey, string.Empty);
+            }
             return result;
         }
 
@@ -1104,6 +1109,7 @@ namespace SqlSugar
         public virtual bool IsSelectNoAll { get; set; } = false;
         public List<string> AutoAppendedColumns { get;  set; }
         public Dictionary<string, string> MappingKeys { get;  set; }
+        public List<KeyValuePair<string,string>> SelectNewIgnoreColumns { get; set; }
         #endregion
 
         private string GetTableName(string entityName)

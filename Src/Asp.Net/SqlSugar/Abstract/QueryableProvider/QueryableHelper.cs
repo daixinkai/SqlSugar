@@ -1797,9 +1797,9 @@ namespace SqlSugar
         protected void _Filter(string FilterName, bool isDisabledGobalFilter)
         {
             QueryBuilder.IsDisabledGobalFilter = isDisabledGobalFilter;
-            if (this.Context.QueryFilter.GeFilterList.HasValue() && FilterName.HasValue())
+            if (this.Context.QueryFilter.GetFilterList.HasValue() && FilterName.HasValue())
             {
-                var list = this.Context.QueryFilter.GeFilterList.Where(it => it.FilterName == FilterName && it.IsJoinQuery == !QueryBuilder.IsSingle());
+                var list = this.Context.QueryFilter.GetFilterList.Where(it => it.FilterName == FilterName && it.IsJoinQuery == !QueryBuilder.IsSingle());
                 foreach (var item in list)
                 {
                     var filterResult = item.FilterValue(this.Context);
@@ -2352,7 +2352,13 @@ namespace SqlSugar
                     var p = new SugarParameter[] {
                             new SugarParameter("@p",re.Value)
                         };
-                    var value = UtilMethods.GetSqlString(config.DbType, "@p", p, true);
+                    var isNvarchar = true;
+                    if (this.Context.CurrentConnectionConfig?.DbType == DbType.SqlServer
+                        &&this.Context.CurrentConnectionConfig?.MoreSettings?.DisableNvarchar!=true) 
+                    {
+                        isNvarchar = false;
+                    }
+                    var value = UtilMethods.GetSqlString(config.DbType, "@p", p, isNvarchar);
                     sql = sql.Replace(re.Name, value);
                
                 }

@@ -54,15 +54,32 @@ namespace SqlSugar
     }
     public partial class DmMethod : DefaultDbMethod, IDbMethods
     { 
+
         public override string WeekOfYear(MethodCallExpressionModel mode)
         {
             var parameterNameA = mode.Args[0].MemberName;
             return $"TO_NUMBER(TO_CHAR({parameterNameA}, 'WW')) ";
         }
         public override string ParameterKeyWord { get; set; } = ":";
+        public string ForXmlPathLast;
+        public override string GetForXmlPath()
+        {
+            if (string.IsNullOrEmpty(ForXmlPathLast)) return null;
+            return "  GROUP BY  "+ ForXmlPathLast;
+        }
         public override string GetStringJoinSelector(string result, string separator)
         {
-            return $"listagg(to_char({result}),'{separator}') within group(order by {result}) ";
+            if (result.ObjToString().Trim().StartsWith("DISTINCT ", StringComparison.OrdinalIgnoreCase))
+            {
+                int index = result.IndexOf(result, StringComparison.Ordinal); // 找到去掉前缀空格后的位置
+                result = result.Substring(index + 9); // 9 是 "DISTINCT " 的长度
+                ForXmlPathLast = result;
+                return $"listagg(to_char(max({result})),'{separator}') within group(order by max({result})) ";
+            }
+            else
+            {
+                return $"listagg(to_char({result}),'{separator}') within group(order by {result}) ";
+            }
         }
         public override string ToInt64(MethodCallExpressionModel model)
         {
@@ -192,7 +209,47 @@ namespace SqlSugar
         }
         public override string DateIsSameByType(MethodCallExpressionModel model)
         {
-            throw new NotSupportedException("Oracle NotSupportedException DateIsSameDay");
+            var parameter = model.Args[0];
+            var parameter2 = model.Args[1];
+            var parameter3 = model.Args[2];
+
+            var dateType = parameter3.MemberValue.ObjToString().ToLower();
+            var date1 = parameter.MemberName;
+            var date2 = parameter2.MemberName;
+
+            if (dateType == "year")
+            {
+                return string.Format("(EXTRACT(YEAR FROM {0}) = EXTRACT(YEAR FROM {1}))", date1, date2);
+            }
+            else if (dateType == "month")
+            {
+                return string.Format("(EXTRACT(YEAR FROM {0}) = EXTRACT(YEAR FROM {1}) AND EXTRACT(MONTH FROM {0}) = EXTRACT(MONTH FROM {1}))", date1, date2);
+            }
+            else if (dateType == "day")
+            {
+                return string.Format("(TRUNC({0}) = TRUNC({1}))", date1, date2);
+            }
+            else if (dateType == "hour")
+            {
+                return string.Format("(TRUNC({0}, 'HH24') = TRUNC({1}, 'HH24'))", date1, date2);
+            }
+            else if (dateType == "minute")
+            {
+                return string.Format("(TRUNC({0}, 'MI') = TRUNC({1}, 'MI'))", date1, date2);
+            }
+            else if (dateType == "second")
+            {
+                return string.Format("(TRUNC({0}, 'SS') = TRUNC({1}, 'SS'))", date1, date2);
+            }
+            else if (dateType == "week" || dateType == "weekday")
+            {
+                return string.Format("(TRUNC({0}, 'IW') = TRUNC({1}, 'IW'))", date1, date2);
+            }
+            else
+            {
+                // 默认按天比较
+                return string.Format("(TRUNC({0}) = TRUNC({1}))", date1, date2);
+            }
         }
         public override string Length(MethodCallExpressionModel model)
         {
