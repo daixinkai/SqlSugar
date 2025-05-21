@@ -1624,10 +1624,10 @@ namespace SqlSugar
                 if (isTran) this.Ado.CommitTran();
                 return result;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 if (isTran) this.Ado.RollbackTran();
-                throw ex;
+                throw;
             }
         }
         private T SaveQueuesProvider<T>(bool isTran, Func<string, List<SugarParameter>, T> func)
@@ -1707,10 +1707,10 @@ namespace SqlSugar
                 if (isTran) this.Ado.CommitTran();
                 return result;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 if (isTran) this.Ado.RollbackTran();
-                throw ex;
+                throw;
             }
         }
 

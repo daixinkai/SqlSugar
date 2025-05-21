@@ -265,7 +265,7 @@ namespace SqlSugar
         {
             throw new Exception("no support  unique index");
         }
-        public override bool IsAnyIndex(string indexName)
+        public override bool IsAnyIndex(string tableName, string indexName)
         {
             return false;
         }

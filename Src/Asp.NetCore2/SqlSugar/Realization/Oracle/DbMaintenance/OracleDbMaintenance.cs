@@ -652,7 +652,7 @@ WHERE table_name = '"+tableName+"'");
             }
             return true;
         }
-        public override bool IsAnyIndex(string indexName)
+        public override bool IsAnyIndex(string tableName, string indexName)
         {
             string sql = string.Format(this.IsAnyIndexSql, indexName);
             return this.Context.Ado.GetInt(sql) == 1;

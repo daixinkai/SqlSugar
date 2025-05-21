@@ -1,4 +1,5 @@
-﻿using SqlSugar;
+﻿#nullable enable
+using SqlSugar;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

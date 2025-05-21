@@ -26,10 +26,10 @@ namespace SqlSugar
             {
                 await bulkCopy.WriteToServerAsync(dt);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 CloseDb();
-                throw ex;
+                throw;
             }
             CloseDb();
             return dt.Rows.Count;

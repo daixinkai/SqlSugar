@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿#nullable enable
+using Newtonsoft.Json;
 using SqlSugar;
 using SqlSugar.Extensions;
 using System;

@@ -231,9 +231,9 @@ namespace SqlSugar
                      NewColumnInfos = tempTable
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
             finally
             {
@@ -358,7 +358,7 @@ namespace SqlSugar
                             item.IndexName = item.IndexName.Replace("[", "").Replace("]", "");
                         }
                     }
-                    if (!this.Context.DbMaintenance.IsAnyIndex(item.IndexName))
+                    if (!this.Context.DbMaintenance.IsAnyIndex(entityInfo.DbTableName, item.IndexName))
                     {
                         var querybulder = InstanceFactory.GetSqlbuilder(this.Context.CurrentConnectionConfig);
                         querybulder.Context = this.Context;
@@ -523,7 +523,7 @@ namespace SqlSugar
                         catch (Exception ex)
                         {
                             Check.Exception(true, ErrorMessage.GetThrowMessage("The current database does not support changing multiple primary keys. " + ex.Message, "当前数据库不支持修改多主键,"+ex.Message));
-                            throw ex;
+                            throw;
                         }
                     }
                     else if (!Enumerable.SequenceEqual(oldPkNames, newPkNames))

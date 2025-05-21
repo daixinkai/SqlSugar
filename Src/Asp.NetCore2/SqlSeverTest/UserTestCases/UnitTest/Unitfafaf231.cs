@@ -1,4 +1,5 @@
-﻿using SqlSeverTest.UserTestCases;
+﻿#nullable enable
+using SqlSeverTest.UserTestCases;
 using SqlSugar;
 using System;
 using System.Collections.Generic;

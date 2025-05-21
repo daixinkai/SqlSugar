@@ -304,7 +304,7 @@ namespace SqlSugar
             if (obj == null)
                 return default(T);
             var value = obj.ObjToString();
-            return new SerializeService().DeserializeObject<T>(value);
+            return DefaultServices.Serialize.DeserializeObject<T>(value);
         }
         public static T GetArray<T>(this IDataReader dr, int i)
         {
