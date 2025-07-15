@@ -1,5 +1,6 @@
-﻿using MongoDbTest;
-//MongoDb还在开发中预计5月30号前可以使用
+﻿using MongoDbTest; 
+//直接运行
+Cases.Init();
 OrmTest.Init();
 AdoTest.Init();
 ExpTest.Init();

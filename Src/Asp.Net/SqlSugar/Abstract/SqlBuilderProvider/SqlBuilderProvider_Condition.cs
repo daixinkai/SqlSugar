@@ -11,7 +11,7 @@ namespace SqlSugar
     public abstract partial class SqlBuilderProvider : SqlBuilderAccessory, ISqlBuilder
     {
         #region Core
-        public KeyValuePair<string, SugarParameter[]> ConditionalModelToSql(List<IConditionalModel> models, int beginIndex = 0)
+        public virtual KeyValuePair<string, SugarParameter[]> ConditionalModelToSql(List<IConditionalModel> models, int beginIndex = 0)
         {
             if (models.IsNullOrEmpty()) return new KeyValuePair<string, SugarParameter[]>();
             StringBuilder builder = new StringBuilder();
@@ -177,6 +177,7 @@ namespace SqlSugar
                                     builder.Replace(" (  AND ", " ( ");
                                     builder.Replace(" (  OR ", " ( ");
                                     builder.Replace("   OR  AND ", "   OR ");
+                                    builder.Replace("   AND  AND ", "   AND ");
                                 }
                             }
                             parameters.AddRange(childSqlInfo.Value);
@@ -399,7 +400,16 @@ namespace SqlSugar
                     item.FieldValue = "null";
                 }
                 builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "=", parameterName);
-                parameters.Add(new SugarParameter(parameterName, GetFieldValue(item)));
+                var p = new SugarParameter(parameterName, GetFieldValue(item));
+                if (item.CSharpTypeName .EqualCase("DateOnly")) 
+                {
+                    p.DbType = System.Data.DbType.Date;
+                }
+                if (item.CSharpTypeName.EqualCase("Char"))
+                {
+                    p.DbType = System.Data.DbType.StringFixedLength;
+                }
+                parameters.Add(p);
             }
         } 
         #endregion

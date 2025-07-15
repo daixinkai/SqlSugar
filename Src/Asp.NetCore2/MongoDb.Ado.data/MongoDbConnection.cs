@@ -12,7 +12,7 @@ namespace MongoDb.Ado.data
     {
         private static readonly Dictionary<string, MongoClient> _clientCache = new Dictionary<string, MongoClient>(StringComparer.OrdinalIgnoreCase);
         private static readonly object _lock = new object();
-
+        public IClientSessionHandle iClientSessionHandle;
         private string _originalConnectionString;
         private IMongoDatabase _database;
         private string _databaseName;
@@ -40,6 +40,17 @@ namespace MongoDb.Ado.data
             if (connStr.TrimStart().StartsWith("mongodb://", StringComparison.OrdinalIgnoreCase))
             {
                 mongoConnStr = connStr;
+                var mongoUrl = new MongoUrl(connStr);
+                if (!string.IsNullOrEmpty(mongoUrl.DatabaseName))
+                {
+                    _databaseName = mongoUrl.DatabaseName;
+                }
+                else 
+                {
+                    _databaseName = "SqlSugarDefaultDB";
+                }
+                _client = GetOrCreateClient(mongoConnStr);
+                _database = _client.GetDatabase(_databaseName);
             }
             else
             {
@@ -73,7 +84,7 @@ namespace MongoDb.Ado.data
                         : $"mongodb://{Uri.EscapeDataString(username)}:{Uri.EscapeDataString(password)}@{host}:{port}/{_databaseName}";
 
                     // 提取查询参数（如果有）
-                    if (dict.ContainsKey("ReplicaSet"))
+                    if (dict.ContainsKey("ReplicaSet")&&!string.IsNullOrEmpty( dict["ReplicaSet"]))
                     {
                         queryParams += $"?replicaSet={dict["ReplicaSet"]}";
                     }
@@ -83,6 +94,10 @@ namespace MongoDb.Ado.data
                         if (!string.IsNullOrEmpty(queryParams))
                         {
                             queryParams += "&";
+                        }
+                        else 
+                        {
+                            queryParams += "?";
                         }
                         queryParams += $"authSource={dict["AuthSource"]}";
                     }

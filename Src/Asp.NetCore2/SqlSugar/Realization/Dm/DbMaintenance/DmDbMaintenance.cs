@@ -5,7 +5,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-
+ 
 namespace SqlSugar
 {
     public class DmDbMaintenance : DbMaintenanceProvider
@@ -55,7 +55,7 @@ AND a.table_name!='SQLPLUS_PRODUCT_PROFILE'";
         {
             get
             {
-                return "select count(1) from user_ind_columns where upper(index_name)=upper('{0}')";
+                return "select count(1) from USER_INDEXES where  upper(index_name)=upper('{0}') and  table_owner=SF_GET_SCHEMA_NAME_BY_ID(CURRENT_SCHID)";
             }
         }
         protected override string CreateIndexSql
@@ -263,6 +263,20 @@ AND a.table_name!='SQLPLUS_PRODUCT_PROFILE'";
         #endregion
 
         #region Methods
+        public override bool IsAnyColumn(string tableName, string columnName, bool isCache = true)
+        {
+            if (isCache)
+            {
+                return base.IsAnyColumn(tableName, columnName, isCache);
+            }
+            else 
+            {
+                var sql = $@"  SELECT COUNT(1) 
+    FROM ALL_TAB_COLUMNS
+    WHERE Lower(TABLE_NAME) = @table AND Lower(COLUMN_NAME) =@column  AND  OWNER=SF_GET_SCHEMA_NAME_BY_ID(CURRENT_SCHID) ";
+                return this.Context.Ado.GetInt(sql, new { column =columnName.ToLower(), table =tableName.ToLower()}) > 0;
+            }
+        }
         public override bool UpdateColumn(string tableName, DbColumnInfo column)
         {
             ConvertCreateColumnInfo(column);
@@ -616,16 +630,12 @@ WHERE table_name = '" + tableName + "'");
             return match.Success ? match.Groups[1].Value : null;
         }
         public override bool IsAnyTable(string tableName, bool isCache = true)
-        {
-            var isSchema = this.Context.CurrentConnectionConfig?.ConnectionString?.Replace(" ","")?.ToLower()?.Contains("schema=") == true;
-            if (isSchema)
-            {
-                var schema= ExtractSchema(this.Context.CurrentConnectionConfig?.ConnectionString);
-                Check.ExceptionEasy(schema == null, "ConnectionString schema format error, please use schema=(\\w+)", "连接字符串schema格式错误,请用schema=(\\w+)");
-                return this.Context.Ado.GetInt($@"SELECT COUNT(*)
+        {  
+            if (isCache==false)
+            {    return this.Context.Ado.GetInt($@"SELECT COUNT(*)
 FROM ALL_TABLES t
 WHERE upper(t.TABLE_NAME) = upper('{tableName}')
-  AND upper(t.OWNER) = upper('{schema}')
+  AND  t.OWNER  = SF_GET_SCHEMA_NAME_BY_ID(CURRENT_SCHID) 
 ") > 0;
               
             }

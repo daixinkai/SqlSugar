@@ -72,18 +72,19 @@ static void MyTest()
         ["d2"] = 2
     };
     var statsValue = db.DynamicBuilder().CreateObjectByType(type, stats);
-    db.StorageableByObject(statsValue).ExecuteCommand();
+    db.StorageableByObject(statsValue).ExecuteCommand(); 
 }
 static void ServerTest()
 {
     var sqlugar = new SqlSugarClient(new ConnectionConfig()
     {
         DbType = DbType.SqlServer,
-        ConnectionString = "SERVER=.;uid=sa;pwd=sasa;database=SqlSugar4Text4"
+        ConnectionString = "SERVER=.;uid=sa;pwd=sasa;database=SqlSugar4Text4;Encrypt=True;TrustServerCertificate=True"
     },
     it =>
     {
-        it.Aop.OnLogExecuting = (s, p) => Console.WriteLine(s, p);
+        it.Aop.OnLogExecuting = (s, p) =>
+        Console.WriteLine(s, p);
     });
 
     var payload = JsonSerializer.SerializeToNode(new { id = 1 });
@@ -181,6 +182,9 @@ static void ServerTest()
         left.CustNum,
         ViewWorker = right
     }).First();
+    sqlugar.CodeFirst.InitTables<Unitadfadfassyss>(); 
+    sqlugar.Storageable(new Unitadfadfassyss() { Code = "a", dateOnly = DateOnly.Parse("2020-1-1"), Name = "a" })
+        .WhereColumns(it=>new { it.Code,it.dateOnly }).ExecuteCommand();
 }
 
 
@@ -290,5 +294,11 @@ public class UnitDatez211afa2222
     [SugarColumn(IsNullable =true)]
     public TimeOnly? timeOnly { get; set; }
     [SugarColumn(IsNullable = true)]
+    public DateOnly? dateOnly { get; set; }
+}
+public class Unitadfadfassyss 
+{
+    public string Name { get; set; }
+    public string Code { get; set; }
     public DateOnly? dateOnly { get; set; }
 }

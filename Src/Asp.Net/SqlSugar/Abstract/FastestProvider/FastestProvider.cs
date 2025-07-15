@@ -61,6 +61,10 @@ namespace SqlSugar
         {
             if (Size > 0)
             {
+                if (this.GetBuider()?.DbFastestProperties?.NoPage == true) 
+                {
+                    Size = int.MaxValue/2;
+                }
                 int resul=0;
                  await this.context.Utilities.PageEachAsync(datas, Size, async item =>
                 {
@@ -352,14 +356,16 @@ namespace SqlSugar
 
         private async Task<int> _BulkUpdate(List<T> datas, string[] whereColumns, string[] updateColumns)
         {
+            var isAuto = this.context.CurrentConnectionConfig.IsAutoCloseConnection;
+            var isAutoOk = false;
+            var old = this.context.Ado.IsDisableMasterSlaveSeparation;
+            var oldOk = false;
             try
             {
                 Begin(datas, false);
                 Check.Exception(whereColumns == null || whereColumns.Count() == 0, "where columns count=0 or need primary key");
                 Check.Exception(updateColumns == null || updateColumns.Count() == 0, "set columns count=0");
-                var isAuto = this.context.CurrentConnectionConfig.IsAutoCloseConnection;
                 this.context.CurrentConnectionConfig.IsAutoCloseConnection = false;
-                var old = this.context.Ado.IsDisableMasterSlaveSeparation;
                 this.context.Ado.IsDisableMasterSlaveSeparation = true;
                 DataTable dt = ToDdateTable(datas);
                 IFastBuilder buider = GetBuider();
@@ -374,8 +380,10 @@ namespace SqlSugar
                     this.context.DbMaintenance.DropTable(dt.TableName);
                 }
                 this.context.CurrentConnectionConfig.IsAutoCloseConnection = isAuto;
-                buider.CloseDb(); 
+                isAutoOk = true;
+                buider.CloseDb();
                 this.context.Ado.IsDisableMasterSlaveSeparation = old;
+                oldOk = true;
                 End(datas, false);
                 return result;
             }
@@ -383,6 +391,14 @@ namespace SqlSugar
             {
                 this.context.Close();
                 throw;
+            }
+            finally 
+            {
+                if(!isAutoOk)
+                    this.context.CurrentConnectionConfig.IsAutoCloseConnection = isAuto;
+                if (!oldOk)
+                    this.context.Ado.IsDisableMasterSlaveSeparation = old;
+
             }
         }
 

@@ -264,6 +264,28 @@ namespace SqlSugar
                 var tType = typeof(T);
                 var classProperties = tType.GetProperties()
                     .Where(p => p.GetIndexParameters().Length == 0).ToList();  
+                if(this.QueryBuilder is QueryBuilder q) 
+                {
+                    if (q.IsAnyParameterExpression) 
+                    {
+                        if (q.SelectValue is LambdaExpression lambda) 
+                        {
+                            if (lambda.Body is MemberInitExpression memberInit) 
+                            {
+                                // 获取memberInit中定义的属性名称
+                                var memberNames = memberInit.Bindings
+                                    .OfType<MemberAssignment>()
+                                    .Select(b => b.Member.Name)
+                                    .ToList();
+
+                                // 过滤掉不在memberInit中的属性
+                                classProperties = classProperties
+                                    .Where(p => memberNames.Contains(p.Name))
+                                    .ToList();
+                            }
+                        }
+                    }
+                }
                 var reval = new List<T>();
                 if (reader != null && !reader.IsClosed)
                 {
@@ -507,7 +529,16 @@ namespace SqlSugar
                     }
                     else
                     {
-                        result.Add(name, DataReaderToDynamicList_Part(readerValues, item, reval, mappingKeys));
+                        List<string> ignorePropertyNames = null;
+                        if (this.QueryBuilder?.SelectNewIgnoreColumns?.Any() == true)
+                        {
+                           var ignoreColumns= this.QueryBuilder.SelectNewIgnoreColumns.Where(it => it.Value == item.PropertyType.Name).ToList();
+                           if (ignoreColumns.Any()) 
+                           {
+                                ignorePropertyNames = ignoreColumns.Select(it => it.Key).ToList();
+                           }
+                        }
+                        result.Add(name, DataReaderToDynamicList_Part(readerValues, item, reval, mappingKeys, ignorePropertyNames));
                     }
                 }
                 else
@@ -524,7 +555,7 @@ namespace SqlSugar
                         var type = UtilMethods.GetUnderType(item.PropertyType);
                         if (addValue == DBNull.Value || addValue == null)
                         {
-                            if (item.PropertyType.IsIn(UtilConstants.IntType, UtilConstants.DecType, UtilConstants.DobType, UtilConstants.ByteType))
+                            if (item.PropertyType.IsIn(UtilConstants.IntType,UtilConstants.LongType, UtilConstants.DecType, UtilConstants.DobType, UtilConstants.ByteType))
                             {
                                 addValue = 0;
                             }
@@ -645,7 +676,7 @@ namespace SqlSugar
                                         Regex.IsMatch(readerValues.First(y => y.Key.EqualCase(item.Name)).Value.ToString(), @"^\[{.+\}]$");
         }
 
-        private Dictionary<string, object> DataReaderToDynamicList_Part<T>(Dictionary<string, object> readerValues, PropertyInfo item, List<T> reval, Dictionary<string, string> mappingKeys = null)
+        private Dictionary<string, object> DataReaderToDynamicList_Part<T>(Dictionary<string, object> readerValues, PropertyInfo item, List<T> reval, Dictionary<string, string> mappingKeys = null,List<string> ignoreColumns=null)
         {
             Dictionary<string, object> result = new Dictionary<string, object>();
             var type = item.PropertyType;
@@ -673,6 +704,10 @@ namespace SqlSugar
                 var typeName = type.Name;
                 if (prop.PropertyType.IsClass())
                 {
+                    if (ignoreColumns?.Contains(name) == true) 
+                    {
+                        continue;
+                    }
                     var suagrColumn = prop.GetCustomAttribute<SugarColumn>();
                     if (suagrColumn != null && suagrColumn.IsJson)
                     {

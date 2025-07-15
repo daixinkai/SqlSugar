@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+using System.Threading.Tasks; 
 
 namespace SqlSugar
 {
@@ -392,7 +393,8 @@ namespace SqlSugar
                     TableId = i,
                     UpdateSql = column.UpdateSql,
                     UpdateServerTime = column.UpdateServerTime,
-                    IsPrimarykey=column.IsPrimarykey
+                    IsPrimarykey=column.IsPrimarykey,
+                    DataType=column.DataType
                 };
                 if (column.ForOwnsOnePropertyInfo != null)
                 {
@@ -413,7 +415,12 @@ namespace SqlSugar
                 if (column.IsJson)
                 {
                     columnInfo.IsJson = true;
-                    if (columnInfo.Value != null)
+                    var insertBuilder = InstanceFactory.GetInsertBuilder(this.Context?.CurrentConnectionConfig);
+                    if (insertBuilder?.SerializeObjectFunc != null&& columnInfo.Value != null) 
+                    {
+                        columnInfo.Value = insertBuilder?.SerializeObjectFunc(columnInfo.Value);
+                    }
+                    else if (columnInfo.Value != null)
                         columnInfo.Value = this.Context.Utilities.SerializeObject(columnInfo.Value);
                 }
                 if (column.IsArray)
@@ -435,6 +442,8 @@ namespace SqlSugar
             if (column.ForOwnsOnePropertyInfo != null)
             {
                 var owsPropertyValue = column.ForOwnsOnePropertyInfo.GetValue(item, null);
+                if (owsPropertyValue == null)
+                    return null;
                 return column.PropertyInfo.GetValue(owsPropertyValue, null);
             }
             else
@@ -505,12 +514,16 @@ namespace SqlSugar
                     if (item.SqlParameterDbType is Type)
                     {
                         continue;
-                    }
+                    } 
                     var parameter = new SugarParameter(this.SqlBuilder.SqlParameterKeyWord + item.DbColumnName, item.Value, item.PropertyType);
                     if (item.IsJson)
                     {
                         parameter.IsJson = true;
                         SqlBuilder.ChangeJsonType(parameter);
+                    }
+                    if (item.SqlParameterDbType is System.Data.DbType dbtype)
+                    {
+                        parameter.DbType = dbtype;
                     }
                     if (item.IsArray)
                     {

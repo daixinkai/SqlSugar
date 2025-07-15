@@ -12,17 +12,39 @@ namespace SqlSugar.MongoDb
         private BsonDocument GetCalculationOperation(BsonValue field, ExpressionType nodeType, BsonValue value, bool leftIsMember, bool rightIsMember)
         {
             string operation = GetCalculationType(nodeType);
-            if (IsStringAdd(value, operation))
+            if (!leftIsMember && rightIsMember&& IsStringAdd(field, operation)) 
+                return StringAddCalculation(value, field, leftIsMember, rightIsMember, out operation);
+            else if (!rightIsMember&&leftIsMember&&IsStringAdd(value, operation))
                 return StringAddCalculation(field, value, leftIsMember, rightIsMember, out operation);
             else
-                return GetCommonCalculation(field, value, operation);
+                return GetCommonCalculation(field, value, operation,leftIsMember,rightIsMember);
         } 
-        private static BsonDocument GetCommonCalculation(BsonValue field, BsonValue value, string operation)
+        private  BsonDocument GetCommonCalculation(BsonValue field, BsonValue value, string operation, bool leftIsMember, bool rightIsMember)
         {
-            return new BsonDocument
+            if (_visitorContext?.IsText == true)
+            {
+                var leftValue = field;
+                var rightValue = value;
+                if (leftIsMember) 
+                {
+                    leftValue = UtilMethods.GetMemberName(leftValue);
+                }
+                if (rightIsMember)
+                {
+                    rightValue = UtilMethods.GetMemberName(rightValue); 
+                }
+                return new BsonDocument
+                {
+                    { operation, new BsonArray { leftValue, rightValue } }
+                };
+            }
+            else
+            {
+                return new BsonDocument
             {
                 { field.ToString(), new BsonDocument { { operation, value } } }
             };
+            }
         }
 
         private static BsonDocument StringAddCalculation(BsonValue field, BsonValue value, bool leftIsMember, bool rightIsMember, out string operation)

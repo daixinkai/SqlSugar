@@ -187,6 +187,14 @@ namespace SqlSugar
                 {
                     sqlParameter.ParameterName = sqlParameter.ParameterName.Replace("@", ":");
                 }
+                if (parameter.TypeName.HasValue()) 
+                {
+                    sqlParameter.DmSqlTypeName = parameter.TypeName;
+                }
+                if (parameter.CustomDbType is DmDbType dmDbType) 
+                {
+                    sqlParameter.DmSqlType = dmDbType;
+                }
                 ++index;
             }
             return result;
@@ -197,7 +205,7 @@ namespace SqlSugar
             return sqlParameter.Direction == ParameterDirection.Output && this.CommandType == CommandType.StoredProcedure;
         }
 
-        private static string[] KeyWord =new string []{ "@month", ":month", ":day","@day","@group", ":group",":index", "@index", "@order", ":order", "@user", "@level", ":user", ":level",":type","@type", ":year", "@year" };
+        private static string[] KeyWord =new string []{ ":asc", "@asc", ":desc", "@desc","@month", ":month", ":day","@day","@group", ":group",":index", "@index", "@order", ":order", "@user", "@level", ":user", ":level",":type","@type", ":year", "@year" };
         private static string ReplaceKeyWordParameterName(string sql, SugarParameter[] parameters)
         {
             sql = ReplaceKeyWordWithAd(sql, parameters);

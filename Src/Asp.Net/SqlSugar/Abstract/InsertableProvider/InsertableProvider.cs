@@ -408,7 +408,7 @@ namespace SqlSugar
                 return await this.Context.Queryable<T>().WhereClassByPrimaryKey(data).IncludesAllFirstLayer().FirstAsync();
             }
         }
-        public async Task<bool> ExecuteCommandIdentityIntoEntityAsync()
+        public virtual async Task<bool> ExecuteCommandIdentityIntoEntityAsync()
         {
             var result = InsertObjs.First();
             var identityKeys = GetIdentityKeys();
@@ -566,6 +566,11 @@ namespace SqlSugar
         public IInsertable<T> MySqlIgnore() 
         {
             this.InsertBuilder.MySqlIgnore = true; 
+            return this;
+        }
+        public IInsertable<T> IgnoreInsertError() 
+        {
+            this.InsertBuilder.MySqlIgnore = true;
             return this;
         }
         public IInsertable<T> MySqlIgnore(bool isIgnore) {

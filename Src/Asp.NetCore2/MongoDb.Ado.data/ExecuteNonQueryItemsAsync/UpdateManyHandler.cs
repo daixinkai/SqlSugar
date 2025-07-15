@@ -5,11 +5,14 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace MongoDb.Ado.data 
 {
     public class UpdateManyHandlerAsync : IMongoOperationHandlerAsync
     {
+        public HandlerContext context { get; set; }
+        public CancellationToken token { get; set; }
         public string operation { get; set; }
         public async  Task<int> HandleAsync(IMongoCollection<BsonDocument> collection, string json)
         {
@@ -19,8 +22,16 @@ namespace MongoDb.Ado.data
             {
                 var filter = doc["filter"].AsBsonDocument;
                 var update = doc["update"].AsBsonDocument;
-                var result =await  collection.UpdateManyAsync(filter, update);
-                total += (int)result.ModifiedCount;
+                if (context.IsAnyServerSession)
+                {
+                    var result = await collection.UpdateManyAsync(context.ServerSession,filter, update, null, token);
+                    total += (int)result.ModifiedCount;
+                }
+                else
+                {
+                    var result = await collection.UpdateManyAsync(filter, update, null, token);
+                    total += (int)result.ModifiedCount;
+                }
             }
             return total;
         }

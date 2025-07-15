@@ -157,6 +157,7 @@ namespace SqlSugar
         Task<bool> AnyAsync(Expression<Func<T, bool>> expression, CancellationToken token);
         bool Any();
         Task<bool> AnyAsync();
+        Task<bool> AnyAsync(CancellationToken token);
         ISugarQueryable<TResult> Select<TResult>(string expShortName, FormattableString expSelect, Type resultType);
         ISugarQueryable<TResult> Select<TResult>(Dictionary<string, Type> keyIsShortName_ValueIsType_Dictionary, FormattableString expSelect, Type resultType);
         ISugarQueryable<TResult> Select<TResult>(string expShortName, FormattableString expSelect,Type EntityType, Type resultType);
@@ -172,6 +173,8 @@ namespace SqlSugar
         ISugarQueryable<T> MergeTable();
         void ForEachDataReader(Action<T> action);
         Task ForEachDataReaderAsync(Action<T> action);
+        IAsyncEnumerable<T> GetAsyncEnumerable();
+        IEnumerable<T> GetEnumerable();
         void ForEach(Action<T> action, int singleMaxReads = 300, System.Threading.CancellationTokenSource cancellationTokenSource = null);
         Task ForEachAsync(Action<T> action, int singleMaxReads = 300, System.Threading.CancellationTokenSource cancellationTokenSource = null);
         void ForEachByPage(Action<T> action, int pageIndex, int pageSize, ref int totalNumber, int singleMaxReads = 300, System.Threading.CancellationTokenSource cancellationTokenSource = null);

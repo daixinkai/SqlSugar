@@ -277,7 +277,8 @@ namespace SqlSugar.TDengine
             var parameter = model.Args[0];
             var parameter2 = model.Args[1];
             var parameter3 = model.Args[2];
-            return string.Format(" {1}+{2}{0} ", parameter3.MemberValue.ObjToString().ToLower().First(), parameter.MemberName, parameter2.MemberValue);
+            var result= string.Format(" {1}+{2}{0} ", parameter3.MemberValue.ObjToString().ToLower().First(), parameter.MemberName, parameter2.MemberValue);
+            return result.Replace("+-","-");
         }
 
 

@@ -183,8 +183,11 @@ namespace SqlSugar
         } 
         public QueryMethodInfo Select(string expShortName, FormattableString expSelect, Type resultType)
         {
-            var method = QueryableObj.GetType().GetMyMethod("Select", 3, typeof(string),typeof(FormattableString),typeof(Type));
-            method= method.MakeGenericMethod(resultType);
+            var method = QueryableObj.GetType().GetMyMethodIsGenericMethod("Select", 3, typeof(string),typeof(FormattableString),typeof(Type));
+            if (method.IsGenericMethodDefinition)
+            {
+                method = method.MakeGenericMethod(resultType);
+            }
             this.QueryableObj = method.Invoke(QueryableObj, new object[] { expShortName, expSelect, resultType });
             return this;
         }
@@ -280,6 +283,13 @@ namespace SqlSugar
             var parameters = new object[] { pageNumber, pageSize, count };
             var reslt = (DataTable)method.Invoke(QueryableObj, parameters);
             count = parameters.Last().ObjToInt();
+            return reslt;
+        }
+        public DataTable ToDataTablePage(int pageNumber, int pageSize)
+        {
+            var method = QueryableObj.GetType().GetMyMethod("ToDataTablePage",2, typeof(int), typeof(int));
+            var parameters = new object[] { pageNumber, pageSize };
+            var reslt = (DataTable)method.Invoke(QueryableObj, parameters); 
             return reslt;
         }
         public DataTable ToDataTable()
@@ -379,6 +389,13 @@ namespace SqlSugar
             var parameters = new object[] { pageNumber, pageSize, count };
             var task = (Task)method.Invoke(QueryableObj, parameters);
             count = parameters.Last().ObjToInt();
+            return await GetTask(task).ConfigureAwait(false);
+        }
+        public async Task<object> ToDataTablePageAsync(int pageNumber, int pageSize)
+        {
+            var method = QueryableObj.GetType().GetMyMethod("ToDataTablePageAsync", 2, typeof(int), typeof(int));
+            var parameters = new object[] { pageNumber, pageSize };
+            var task = (Task)method.Invoke(QueryableObj, parameters); 
             return await GetTask(task).ConfigureAwait(false);
         }
         public async Task<object> ToDataTableAsync()

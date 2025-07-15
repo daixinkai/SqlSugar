@@ -1,5 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 using MongoDb.Ado.data;
+using MongoDB.Driver;
 using SqlSugar.MongoDb;
 using System;
 using System.Collections.Generic;
@@ -14,6 +15,17 @@ namespace SqlSugar.MongoDb
 {
     public partial class MongoDbProvider : AdoProvider
     {
+        IClientSessionHandle iClientSessionHandle
+        { 
+            get 
+            {
+                return (this.Connection as MongoDbConnection).iClientSessionHandle;
+            }
+            set 
+            {
+                (this.Connection as MongoDbConnection).iClientSessionHandle = value;
+            }
+        }
         public MongoDbProvider() 
         {
             if (StaticConfig.AppContext_ConvertInfinityDateTime == false)
@@ -24,6 +36,77 @@ namespace SqlSugar.MongoDb
          
         }
         public override bool IsNoSql { get; set; } = true;
+        public override void BeginTran()
+        {
+            iClientSessionHandle = ((MongoDbConnection)this.Connection).GetClient().StartSession();
+            iClientSessionHandle.StartTransaction();
+        }
+        public override void CommitTran()
+        {
+            if (iClientSessionHandle != null)
+            {
+                try
+                {
+                    iClientSessionHandle.CommitTransaction();
+                }
+                finally
+                {
+                    iClientSessionHandle.Dispose();
+                    iClientSessionHandle = null;
+                }
+            }
+        }
+        public override void RollbackTran()
+        {
+            if (iClientSessionHandle != null)
+            {
+                try
+                {
+                    iClientSessionHandle.AbortTransaction();
+                }
+                finally
+                {
+                    iClientSessionHandle.Dispose();
+                    iClientSessionHandle = null;
+                }
+            }
+        }
+        public override async Task BeginTranAsync()
+        {
+            iClientSessionHandle = await ((MongoDbConnection)this.Connection).GetClient().StartSessionAsync();
+            iClientSessionHandle.StartTransaction();//StartTransaction has no asynchronous methods
+        }
+        public override async Task CommitTranAsync()
+        {
+            if (iClientSessionHandle != null)
+            {
+                try
+                {
+                    await iClientSessionHandle.CommitTransactionAsync();
+
+                }
+                finally 
+                {
+                    iClientSessionHandle.Dispose();
+                    iClientSessionHandle = null;
+                }
+            }
+        }
+        public override async Task RollbackTranAsync()
+        {
+            if (iClientSessionHandle != null)
+            {
+                try
+                {
+                    await iClientSessionHandle.AbortTransactionAsync();
+                } 
+                finally 
+                { 
+                    iClientSessionHandle.Dispose(); 
+                    iClientSessionHandle = null;
+                }
+            }
+        }
         public override IDbConnection Connection
         {
             get

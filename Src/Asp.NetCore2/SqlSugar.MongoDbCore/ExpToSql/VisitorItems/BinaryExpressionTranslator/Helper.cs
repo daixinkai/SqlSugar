@@ -7,7 +7,8 @@ using System.Text;
 namespace SqlSugar.MongoDb
 {
     public partial class BinaryExpressionTranslator
-    { 
+    {
+
         private static bool IsEq(string op)
         {
             return op == "$eq";
@@ -23,7 +24,18 @@ namespace SqlSugar.MongoDb
             leftIsMember = leftVisitor.visitorContext?.ExpType == typeof(MemberExpression);
             rightIsMember = rightVisitor.visitorContext?.ExpType == typeof(MemberExpression);
 
-            op = expr.NodeType switch
+            op = GetComparisonOperator(expr);
+        }
+
+        public static string GetComparisonOperator(BinaryExpression expr)
+        {
+            var type = expr.NodeType;
+            return GetComparisonType(type);
+        }
+
+        public static string GetComparisonType(ExpressionType type)
+        {
+            return type switch
             {
                 ExpressionType.Equal => "$eq",
                 ExpressionType.NotEqual => "$ne",
@@ -33,7 +45,8 @@ namespace SqlSugar.MongoDb
                 ExpressionType.LessThanOrEqual => "$lte",
                 _ => null
             };
-        } 
+        }
+
         private static string GetCalculationType(ExpressionType nodeType)
         {
             return nodeType switch

@@ -124,9 +124,13 @@ namespace SqlSugar
                     {
                         continue;
                     }
-                    if (item.SqlParameterDbType is Type) 
+                    if (item.SqlParameterDbType is Type)
                     {
                         continue;
+                    }
+                    else if (item.SqlParameterDbType is System.Data.DbType dbtype) 
+                    {
+                        paramters.DbType = dbtype;
                     }
                     if (item.IsJson)
                     {
@@ -347,8 +351,14 @@ namespace SqlSugar
                 }
                 if (column.IsJson && columnInfo.Value != null)
                 {
-                    if (columnInfo.Value != null)
+                    if (this.InsertBuilder.SerializeObjectFunc != null&& columnInfo.Value != null)
+                    {
+                          columnInfo.Value = this.InsertBuilder.SerializeObjectFunc(columnInfo.Value);
+                    }
+                    else if (columnInfo.Value != null)
+                    {
                         columnInfo.Value = this.Context.Utilities.SerializeObject(columnInfo.Value);
+                    }
                 }
                 //var tranColumn=EntityInfo.Columns.FirstOrDefault(it => it.IsTranscoding && it.DbColumnName.Equals(column.DbColumnName, StringComparison.CurrentCultureIgnoreCase));
                 if (column.IsTranscoding && columnInfo.Value.HasValue())

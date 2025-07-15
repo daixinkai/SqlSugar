@@ -1,5 +1,4 @@
-﻿using MongoDbTest.DBHelper;
-using SqlSugar;
+﻿using SqlSugar;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -14,6 +13,7 @@ namespace MongoDbTest
         public static void Init()
         {
             var db = DbHelper.GetNewDb();
+            db.DbMaintenance.TruncateTable<OrderInfo>();
             db.Insertable(new OrderInfo() { CreateTime = DateTime.Now, Name = "a", Price = 1 })
             .ExecuteCommand();
             var ids = db.Insertable(new List<OrderInfo>(){
@@ -116,7 +116,28 @@ namespace MongoDbTest
                            Id = it.Id,
                            Name = it.Name+"b",
                            Name2 =   "b"+it.Name
-                       }).ToDataTable(); 
+                       }).ToDataTable();
+
+            var list13 = db.Queryable<OrderInfo>()
+                   .GroupBy(it => it.Name)
+                   .Select(it => new
+                   {
+                       key = it.Name,
+                       groupCount = SqlFunc.AggregateCount(it.Id),
+                       max=SqlFunc.AggregateMax(it.Id),
+                       min=SqlFunc.AggregateMin(it.Id)
+                   }).ToList();
+
+            var list14 = db.Queryable<OrderInfo>()
+               .GroupBy(it => new { it.Name ,it.Price })
+               .Select(it => new
+               {
+                   key = it.Name,
+                   Prie=it.Price,
+                   groupCount = SqlFunc.AggregateCount(it.Id),
+                   max = SqlFunc.AggregateMax(it.Id),
+                   min = SqlFunc.AggregateMin(it.Id)
+               }).ToList();
             //测试生成SQL性能
             TestSqlBuilder(db);
         }

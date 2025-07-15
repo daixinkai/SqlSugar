@@ -61,7 +61,7 @@ namespace MongoDb.Ado.data
         {
             var (operation, collectionName, json) = ParseCommand(_commandText);
             var collection = GetCollection(collectionName);
-            var context = new HandlerContext();
+            var context = new HandlerContext() { Connection = this.Connection };
             var result= ExecuteHandlerFactory.Handler(operation, json, collection, context);
             ((MongoDbConnection)this.Connection).ObjectIds = context.ids;
             return result;
@@ -70,32 +70,39 @@ namespace MongoDb.Ado.data
         { 
             var (operation, collectionName, json) = ParseCommand(_commandText); 
             var collection = GetCollection(collectionName);
-            return new ExecuteScalarHandler().Handle(operation,collection, json); 
+            var context = new HandlerContext() { Connection = this.Connection };
+            return new ExecuteScalarHandler().Handle(operation,collection, json,context); 
         } 
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
             var (operation, collectionName, json) = ParseCommand(_commandText);
             var collection = GetCollection(collectionName);
-            return new DbDataReaderFactory().Handle(operation, collection, json);
+            var context = new HandlerContext() { Connection = this.Connection };
+            return new DbDataReaderFactory().Handle(operation, collection, json,context);
         }
 
-        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
+        public async override  Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
         {
             var (operation, collectionName, json) = ParseCommand(_commandText);
             var collection = GetCollection(collectionName);
-            return ExecuteHandlerFactoryAsync.HandlerAsync(operation, json, collection);
+            var context = new HandlerContext() { Connection = this.Connection};
+            var result= await ExecuteHandlerFactoryAsync.HandlerAsync(operation, json, collection, cancellationToken,context);
+            ((MongoDbConnection)this.Connection).ObjectIds = context.ids;
+            return result;
         }
         public override Task<object> ExecuteScalarAsync(CancellationToken cancellationToken)
         {
             var (operation, collectionName, json) = ParseCommand(_commandText);
             var collection = GetCollection(collectionName);
-            return new ExecuteScalarHandlerAsync().HandleAsync(operation, collection, json);
+            var context = new HandlerContext() { Connection = this.Connection };
+            return new ExecuteScalarHandlerAsync().HandleAsync(operation, collection, json, cancellationToken,context);
         }
         protected override  Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior,CancellationToken cancellationToken)
         {
             var (operation, collectionName, json) = ParseCommand(_commandText);
             var collection = GetCollection(collectionName);
-            return new DbDataReaderFactoryAsync().HandleAsync(operation, collection, json);
+            var context = new HandlerContext() { Connection = this.Connection };
+            return new DbDataReaderFactoryAsync().HandleAsync(operation, collection, json, cancellationToken,context);
         }
 
 
@@ -119,6 +126,12 @@ namespace MongoDb.Ado.data
         {
             if (string.IsNullOrWhiteSpace(cmd))
                 throw new InvalidOperationException("CommandText 不能为空。");
+
+            if (cmd.Trim().StartsWith("db.", StringComparison.OrdinalIgnoreCase)) 
+            {
+               var cmdInfo= MongoDbMethodUtils.ParseMongoCommand(cmd);
+                return (cmdInfo.Operation,cmdInfo.CollectionName,cmdInfo.Json);
+            }
 
             var parts = cmd.Trim().Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2)

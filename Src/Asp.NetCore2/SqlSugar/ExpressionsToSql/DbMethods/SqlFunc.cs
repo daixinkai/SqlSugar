@@ -10,7 +10,10 @@ namespace SqlSugar
 {
     public partial class SqlFunc
     {
-        
+        public static long UNIX_TIMESTAMP(DateTime dateTime) 
+        {
+            throw new NotSupportedException("Can only be used in expressions");
+        }
         public static T Coalesce<T>(T value1, T value2)
         {
             throw new NotSupportedException("Can only be used in expressions");
@@ -264,6 +267,14 @@ namespace SqlSugar
         public static bool ContainsArray<T>(List<T> thisValue, object InField)
         {
             return thisValue.Contains((T)InField);
+        } 
+        public static bool ContainsArray<T>(T[] thisValue, object InField, bool isNvarchar)
+        {
+            return thisValue.Contains((T)InField, true);
+        }
+        public static bool ContainsArray<T>(List<T> thisValue, object InField, bool isNvarchar)
+        {
+            return thisValue.Contains((T)InField, true);
         }
         public static bool ContainsArrayUseSqlParameters<T>(List<T> thisValue, object InField)
         {

@@ -5,12 +5,15 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MongoDb.Ado.data 
 {
     public class QueryFindHandlerAsync : IQueryHandlerAsync
     {
+        public HandlerContext Context { get; set; }
+        public CancellationToken token { get; set; }
         public async Task<DbDataReader> HandlerAsync(IMongoCollection<BsonDocument> collection, BsonValue doc)
         {
             BsonDocument filter;
@@ -32,13 +35,14 @@ namespace MongoDb.Ado.data
                 throw new ArgumentException("Invalid JSON format for MongoDB find operation.");
             }
 
-            var findFluent = collection.Find(filter);
+            var findFluent =Context?.IsAnyServerSession==true? collection.Find(Context.ServerSession,filter) : collection.Find(filter);
 
             if (projection != null)
                 findFluent = findFluent.Project<BsonDocument>(projection);
 
-            var cursor =await findFluent.ToListAsync();    
-            return new MongoDbBsonDocumentDataReader(cursor); // 你要确保这个类支持逐行读取 BsonDocument
+            var cursor =await findFluent.ToListAsync(token);
+            var result = MongoDbDataReaderHelper.ToDataReader(cursor);
+            return result;
         }
     }
 }

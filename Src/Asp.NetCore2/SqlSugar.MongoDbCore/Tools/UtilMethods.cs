@@ -1,5 +1,10 @@
-﻿using MongoDB.Bson;
+﻿using Dm.util;
+using Microsoft.IdentityModel.Tokens;
+using MongoDB.Bson;
+using MongoDB.Bson.IO;
+using MongoDB.Bson.Serialization;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -17,13 +22,112 @@ namespace SqlSugar.MongoDb
 {
     public class UtilMethods
     {
+        public static bool IsCollectionOrArrayButNotByteArray(Type type)
+        {
+            if (type == null)
+                return false;
+
+            if (type == typeof(byte[]))
+                return false;
+
+            if (type.IsArray)
+                return true;
+
+            if (typeof(IEnumerable).IsAssignableFrom(type) && type != typeof(string))
+                return true;
+
+            return false;
+        }
+        public static bool IsValidObjectId(string id)
+        {
+            return id != null && id.Length == 24 && ObjectId.TryParse(id, out _);
+        }
+        internal static JoinQueryInfo BuilderJoinInfo(Expression joinExpression, JoinType joinType, QueryBuilder queryBuilder, SqlSugarProvider context)
+        {
+            queryBuilder.CheckExpressionNew(joinExpression, "Join");
+            queryBuilder.JoinExpression = joinExpression;
+            var express = LambdaExpression.Lambda(joinExpression).Body;
+            var lastPareamter = (express as LambdaExpression).Parameters.Last();
+            context.InitMappingInfo(lastPareamter.Type);
+            var newJoins = queryBuilder.JoinQueryInfos.ToList();
+            var oldJoins = queryBuilder.JoinQueryInfos;
+            var result = new JoinQueryInfo()
+            {
+                JoinIndex = queryBuilder.JoinQueryInfos.Count,
+                JoinType = joinType,
+                JoinWhere = "1=1",
+                ShortName = lastPareamter.Name,
+                EntityType = lastPareamter.Type,
+                TableName = null
+            };
+            newJoins.add(result);
+            queryBuilder.JoinQueryInfos = newJoins;
+            MongoDbQueryBuilder mb2 = null;
+            if (queryBuilder is MongoDbQueryBuilder mb) 
+            {
+                mb2 = mb;
+                var exp = joinExpression as LambdaExpression;
+                mb.EasyJoin =exp.Body.NodeType==ExpressionType.Equal&&exp.Body is BinaryExpression b && b.Left is MemberExpression l && b.Right is MemberExpression r && l.Expression is ParameterExpression && r.Expression is ParameterExpression;
+                if (mb.EasyJoin==false)
+                {
+                    mb.LastParameter = exp.Parameters.Last().Name;
+                    mb.FirstParameter = exp.Parameters.First().Name;
+                    mb.lets = new Dictionary<string, string>();
+                }
+            }
+
+            var expResult = queryBuilder.GetExpressionValue(joinExpression, ResolveExpressType.WhereMultiple);
+            queryBuilder.JoinQueryInfos = oldJoins;
+            result.JoinWhere = expResult.GetResultString();
+            result.TableName = context.EntityMaintenance.GetTableName(lastPareamter.Type);
+
+            if (context.CurrentConnectionConfig?.MoreSettings?.PgSqlIsAutoToLower == false)
+            {
+                result.ShortName = queryBuilder.Builder.GetTranslationColumnName(result.ShortName);
+            }
+            if (mb2!=null) 
+            {
+                var lets=mb2.lets;
+                if (mb2.JoinQueryInfoLets == null)
+                {
+                    mb2.JoinQueryInfoLets = new Dictionary<string, Dictionary<string, string>>();
+                }
+                if (mb2.EasyJoin==false)
+                {
+                    mb2.JoinQueryInfoLets.Add(result.ShortName, mb2.lets);
+                }
+                mb2.EasyJoin = null;
+            } 
+            return result;
+        }
+
+        public static BsonValue ParseJsonObject(object json)
+        {
+            if (json is string str && str.TrimStart().StartsWith("{"))
+            { 
+                var arrayObj = BsonDocument.Parse(str);
+                return arrayObj;  
+            }
+            else
+            {
+                using var reader = new JsonReader(json?.toString());
+                var arrayObj = BsonSerializer.Deserialize<BsonValue>(reader);
+                return arrayObj;
+            }
+        }
+        public static BsonValue MyCreate(object value)
+        {
+            if (value is DateTime dt)
+            {
+                var utcNow = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+                return new BsonDateTime(utcNow);
+            }
+            return BsonValue.Create(value);
+        }
         internal static MongoDB.Bson.IO.JsonWriterSettings GetJsonWriterSettings() 
         {
-            return new MongoDB.Bson.IO.JsonWriterSettings
-            {
-                OutputMode = MongoDB.Bson.IO.JsonOutputMode.Shell // JSON标准格式，带双引号
-            };
-        }
+            return new MongoDB.Bson.IO.JsonWriterSettings {   };
+        } 
         internal static DateTime GetMinDate(ConnectionConfig currentConnectionConfig)
         {
             if (currentConnectionConfig.MoreSettings == null)
@@ -487,6 +591,36 @@ namespace SqlSugar.MongoDb
             if (isMember) return "$" + field;
             else
                 return field;
+        }
+
+        internal static BsonValue MyCreate(object value, DbColumnInfo col)
+        {
+            if (value != null&&IsObjectColumn(col))
+            {
+                return MyCreate(ObjectId.Parse(value?.ToString()));
+            }
+            return MyCreate(value);
+        }
+
+        private static bool IsObjectColumn(DbColumnInfo col)
+        {
+            return col.DbColumnName == "_id" || col.DataType == nameof(ObjectId);
+        }
+
+        internal static bool IsMongoVariable(BsonValue memberName)
+        {
+            return memberName is BsonString s && s.Value?.StartsWith("$")==true;
+        }
+        internal static BsonValue GetMemberName(BsonValue memberName)
+        {
+            if (memberName is BsonDocument)
+                return memberName;
+            if (memberName is BsonArray)
+                return memberName;
+            else if (UtilMethods.IsMongoVariable(memberName))
+                return memberName;
+            else
+                return $"${memberName}";
         }
         //public static object ConvertDataByTypeName(string ctypename,string value)
         //{

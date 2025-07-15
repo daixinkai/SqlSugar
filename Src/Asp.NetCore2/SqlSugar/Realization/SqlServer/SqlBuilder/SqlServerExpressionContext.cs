@@ -20,6 +20,11 @@ namespace SqlSugar
     }
     public partial class SqlServerMethod : DefaultDbMethod, IDbMethods
     {
+        public override string UNIX_TIMESTAMP(MethodCallExpressionModel model)
+        {
+            var parameterNameA = model.Args[0].MemberName;
+            return $" DATEDIFF(SECOND, '1970-01-01', {parameterNameA}) ";
+        }
         public override string ToDecimal(MethodCallExpressionModel model)
         {
             var parameter = model.Args[0];
@@ -97,6 +102,11 @@ namespace SqlSugar
         public override string HasValue(MethodCallExpressionModel model)
         {
             if (model.Args[0].Type == UtilConstants.GuidType)
+            {
+                var parameter = model.Args[0];
+                return string.Format("( {0} IS NOT NULL )", parameter.MemberName);
+            }
+            else if (model.Args[0].Type.IsIn(UtilConstants.DobType,UtilConstants.DecType, UtilConstants.DateTimeOffsetType, UtilConstants.DateType))
             {
                 var parameter = model.Args[0];
                 return string.Format("( {0} IS NOT NULL )", parameter.MemberName);

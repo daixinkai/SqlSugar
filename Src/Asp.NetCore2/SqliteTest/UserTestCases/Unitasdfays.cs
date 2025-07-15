@@ -11,8 +11,23 @@ namespace OrmTest
     public class Unitasdfays
     {
         public static void Init() 
-        {
+        { 
+            _4_Subquery1_Unit.Init();
             var db = NewUnitTest.Db;
+            db.CodeFirst.InitTables<Unitdfadfsdy>();
+            db.CurrentConnectionConfig.MoreSettings = new ConnMoreSettings()
+            {
+                SqliteCodeFirstEnableDefaultValue=true
+            };
+            db.CodeFirst.InitTables<UNITDFADFSDY>();
+            db.DbMaintenance.DropTable<Unitdfadfsdy>();
+            db.CodeFirst.InitTables<Unitdfadfsdy>(); 
+            db.Insertable(new Unitdfadfsdy() { Id = 1 }).ExecuteCommand();
+            db.CodeFirst.InitTables<UNITDFADFSDY>();
+            var list=db.Queryable<UNITDFADFSDY>().ToList();
+            db.CodeFirst.InitTables<UNITDFADFSdY>();
+            if (list.First().a != "1") throw new Exception("unit error");
+            db = NewUnitTest.Db;
             db.CodeFirst.InitTables(typeof(SqlSugarTestEntity));
             db.DbMaintenance.TruncateTable<SqlSugarTestEntity>();
             SqlSugarTestEntity entity = new SqlSugarTestEntity { Id=1,BarCode = "1111", PatientName = "小明" };
@@ -26,8 +41,35 @@ namespace OrmTest
             {
                 throw new Exception("unit error");
             }
-
+            db.CodeFirst.InitTables<Order>();
+            db.Insertable(new Order() { Name = "a", Price = 1, CreateTime = DateTime.Now }).ExecuteCommand();
+            db.Insertable(new Order() { Name = "a", Price = 1, CreateTime = DateTime.Now }).ExecuteCommand();
+            var lastids = db.Queryable<Order>()
+                .GroupBy(x => x.Id)
+                .Select(x => new
+                {
+                    x.Id,
+                    a = SqlFunc.Subqueryable<Order>().Where(s => s.Id == x.Id).First()
+                }).ToList();//没溢出，但结果，Aa 都是初值即是空？？ 
         }
+    }
+    public class Unitdfadfsdy 
+    {
+        public int Id { get; set; }
+    }
+    public class UNITDFADFSDY
+    {
+        public int Id { get; set; }
+        [SugarColumn(DefaultValue ="1")]
+        public string a { get; set; }
+    }
+    public class UNITDFADFSdY
+    {
+        public int Id { get; set; }
+        [SugarColumn(DefaultValue = "1")]
+        public string a { get; set; }
+        [SugarColumn(DefaultValue = "10")]
+        public int num { get; set; }
     }
     [SqlSugar.SugarTable("SQLSUGARTEST")]
     [SqlSugar.SplitTable(SplitType._Custom01, typeof(SplitTableService))]

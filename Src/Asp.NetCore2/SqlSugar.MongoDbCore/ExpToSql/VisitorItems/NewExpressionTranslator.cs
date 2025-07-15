@@ -1,5 +1,6 @@
 ﻿using MongoDB.Bson;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 
@@ -26,7 +27,46 @@ namespace SqlSugar.MongoDb
             {
                 return Select(expr);
             }
-            throw new NotSupportedException(this._context.resolveType + "");
+            else if (this._context.resolveType == ResolveExpressType.ArraySingle) 
+            {
+                return WhereColumn(expr);
+            }
+            HandleExpressionError(expr);
+            return null;
+        }
+
+        private BsonValue WhereColumn(Expression expr)
+        {
+            if (expr is NewExpression newExpr)
+            {
+                var bsonArray = new BsonArray();
+
+                // 遍历构造函数参数对应的成员
+                foreach (var arg in newExpr.Arguments)
+                {
+                    if (arg is MemberExpression memberExpr)
+                    {
+                        bsonArray.Add(memberExpr.Member.Name);
+                    }
+                    else if (arg is UnaryExpression unary && unary.Operand is MemberExpression innerMember)
+                    {
+                        // 处理装箱后的成员访问（如 object 包裹）
+                        bsonArray.Add(innerMember.Member.Name);
+                    }
+                    else
+                    {
+                        HandleExpressionError(expr);
+                    }
+                } 
+                return new BsonDocument(UtilConstants.FieldName,bsonArray);
+            } 
+            HandleExpressionError(expr);
+            return null;
+        }
+
+        private static void HandleExpressionError(Expression expr)
+        {
+            throw new Exception(expr.ToString() + " error");
         }
 
         private BsonValue Select(Expression expr)
@@ -41,25 +81,30 @@ namespace SqlSugar.MongoDb
                 // 获取字段名
                 var fieldName = member.Name;
 
+                var visExp = exp.Arguments[exp.Members.IndexOf(member)];
                 // 使用 ExpressionVisitor 访问表达式
-                var json = new ExpressionVisitor(_context, _visitorContext).Visit(exp.Arguments[exp.Members.IndexOf(member)]);
+                var json = new ExpressionVisitor(_context, _visitorContext).Visit(visExp);
 
-                SetProjectionValue(json, fieldName, projectionDocument);
+                SetProjectionValue(json, fieldName, projectionDocument, visExp);
             }
             projectionDocument["_id"] = 0;
             return projectionDocument;
         }
 
-        private static void SetProjectionValue(BsonValue json, string fieldName, BsonDocument projectionDocument)
+        private static void SetProjectionValue(BsonValue json, string fieldName, BsonDocument projectionDocument, Expression visExp)
         {
             var jsonString = json.ToJson(UtilMethods.GetJsonWriterSettings());
             if (jsonString.StartsWith("{") && jsonString.EndsWith("}"))
             {
                 projectionDocument[fieldName] = json;
             }
+            else if (ExpressionTool.GetParameters(visExp).Count == 0) 
+            {
+                projectionDocument[fieldName] =  jsonString ;
+            }
             else
             {
-                projectionDocument[fieldName] = "$"+jsonString.TrimStart('\"').TrimEnd('\"');
+                projectionDocument[fieldName] = "$" + jsonString.TrimStart('\"').TrimEnd('\"');
             }
         }
 
@@ -80,7 +125,7 @@ namespace SqlSugar.MongoDb
                 }
                 else
                 {
-                    setDocument[fieldName] = BsonValue.Create(fieldValue);
+                    setDocument[fieldName] =  UtilMethods.MyCreate(fieldValue);
                 }
             }
 

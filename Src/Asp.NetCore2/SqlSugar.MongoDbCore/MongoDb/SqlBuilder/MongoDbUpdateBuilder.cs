@@ -38,12 +38,12 @@ namespace SqlSugar.MongoDb
         }
         protected override string ToSingleSqlString(List<IGrouping<int, DbColumnInfo>> groupList)
         {
-            var result = BuildUpdateMany(groupList,  this.TableName);
+            var result = BuildUpdateMany(groupList, this.TableName);
             return result;
         }
         protected override string TomultipleSqlString(List<IGrouping<int, DbColumnInfo>> groupList)
         {
-            var result = BuildUpdateMany(groupList,this.TableName);
+            var result = BuildUpdateMany(groupList, this.TableName);
             return result;
         }
         public string BuildUpdateMany(List<IGrouping<int, DbColumnInfo>> groupList, string tableName)
@@ -54,7 +54,7 @@ namespace SqlSugar.MongoDb
             {
                 BsonArray filterArray = GetFilterArray();
                 var filter = new BsonDocument("$and", filterArray);
-                operations.Add($"{{ filter: {filter.ToJson(UtilMethods.GetJsonWriterSettings())} , update: {SetValues.FirstOrDefault().Value }}}");
+                operations.Add($"{{ filter: {filter.ToJson(UtilMethods.GetJsonWriterSettings())} , update: {SetValues.FirstOrDefault().Value}}}");
             }
             else if (this.SetValues.Any())
             {
@@ -76,10 +76,10 @@ namespace SqlSugar.MongoDb
                 UpdateByObject(groupList, operations, pks);
             }
             var sb = new StringBuilder();
-            sb.Append($"updateMany {tableName} [ ");
+            sb.Append($"BulkWrite {tableName} [ ");
             sb.Append(string.Join(", ", operations));
             sb.Append(" ]");
-
+            this.Parameters = new List<SugarParameter>();
             return sb.ToString();
         }
 
@@ -103,15 +103,19 @@ namespace SqlSugar.MongoDb
                 var setDoc = new BsonDocument();
 
                 foreach (var col in group)
-                {
-
-                    if (col.IsPrimarykey || pks.Contains(col.DbColumnName))
+                { 
+                    if (pks.Any(s=>s.EqualCase(col.DbColumnName)))
                     {
-                        filter[col.DbColumnName] = BsonValue.Create(ObjectId.Parse(col.Value?.ToString())); ;
+                        filter[col.DbColumnName] = UtilMethods.MyCreate(col.Value,col); 
                     }
-                    else
+                    else if (col.IsJson)
                     {
-                        var bsonValue = BsonValue.Create(col.Value);
+                        var bsonValue = UtilMethods.ParseJsonObject(col.Value?.ToString());
+                        setDoc[col.DbColumnName] = bsonValue;
+                    }
+                    else if(col.IsPrimarykey==false)
+                    {
+                        var bsonValue = UtilMethods.MyCreate(col.Value, col);
                         setDoc[col.DbColumnName] = bsonValue;
                     }
                 }
@@ -127,10 +131,7 @@ namespace SqlSugar.MongoDb
             { "update", update }
         };
 
-                string json = entry.ToJson(new MongoDB.Bson.IO.JsonWriterSettings
-                {
-                    OutputMode = MongoDB.Bson.IO.JsonOutputMode.Shell // JSON标准格式，带双引号
-                });
+                string json = entry.ToJson(UtilMethods.GetJsonWriterSettings());
 
                 operations.Add(json);
             }

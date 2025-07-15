@@ -498,7 +498,7 @@ AND syscomments.text LIKE '%"+tableName+"%'");
             ConvertCreateColumnInfo(column);
             if (column.DataType != null && this.Context.CurrentConnectionConfig?.MoreSettings?.SqlServerCodeFirstNvarchar == true)
             {
-                if (!column.DataType.ToLower().Contains("nvarchar"))
+                if (!column.DataType.ToLower().Contains("nvarchar") && !column.DataType.EndsWith(")"))
                 {
                     column.DataType = column.DataType.ToLower().Replace("varchar", "nvarchar");
                 }
@@ -726,7 +726,7 @@ AND syscomments.text LIKE '%"+tableName+"%'");
                 }
                 else if (item.DataType != null && this.Context.CurrentConnectionConfig?.MoreSettings?.SqlServerCodeFirstNvarchar == true)
                 {
-                    if (!item.DataType.ToLower().Contains("nvarchar"))
+                    if (!item.DataType.ToLower().Contains("nvarchar")&&!item.DataType.EndsWith(")"))
                     {
                         item.DataType = item.DataType.ToLower().Replace("varchar", "nvarchar");
                     }

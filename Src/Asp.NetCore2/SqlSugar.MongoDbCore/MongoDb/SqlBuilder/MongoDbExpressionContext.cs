@@ -4,6 +4,9 @@ using SqlSugar.MongoDb;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text.RegularExpressions;
+using Microsoft.IdentityModel.Tokens;
+using System.Collections;
 namespace SqlSugar.MongoDb
 {
     public class MongoDbExpressionContext : ExpressionContext, ILambdaExpressions
@@ -13,11 +16,9 @@ namespace SqlSugar.MongoDb
             var context = new MongoNestedTranslatorContext();
             context.resolveType = resolveType;
             context.context = this.SugarContext.Context;
+            context.queryBuilder = this.SugarContext.QueryBuilder;
             var sql=MongoNestedTranslator.Translate(expression, context);
-            var shellString = sql.ToJson(new JsonWriterSettings
-            {
-                OutputMode = JsonOutputMode.Shell
-            }); 
+            var shellString = sql.ToJson(UtilMethods.GetJsonWriterSettings()); 
             this.Result.Append(shellString);
         }
 
@@ -154,356 +155,555 @@ namespace SqlSugar.MongoDb
     }
     public class MongoDbMethod : DefaultDbMethod, IDbMethods
     {
-
-        public override string GetDateString(string dateValue, string formatString)
-        {
-            if (!(formatString?.Contains("24") == true))
-            {
-                formatString = formatString.Replace("HH", "hh24");
-                if (!(formatString?.Contains("24") == true))
-                {
-                    formatString = formatString.Replace("hh", "hh24");
-                }
-            }
-            formatString = formatString.Replace("mm", "mi"); 
-            return $"to_char({dateValue},'{formatString}') ";
-        }
-        public override string CharIndex(MethodCallExpressionModel model)
-        {
-            return string.Format(" (strpos ({1},{0})-1)", model.Args[0].MemberName, model.Args[1].MemberName);
-        }
-        public override string TrueValue()
-        {
-            return "true";
-        }
-        public override string FalseValue()
-        {
-            return "false";
-        }
-        public override string DateDiff(MethodCallExpressionModel model)
-        {
-            var parameter = (DateType)(Enum.Parse(typeof(DateType), model.Args[0].MemberValue.ObjToString()));
-            var begin = model.Args[1].MemberName;
-            var end = model.Args[2].MemberName;
-            switch (parameter)
-            {
-                case DateType.Year:
-                    return $" ( DATE_PART('Year',  {end}   ) - DATE_PART('Year',  {begin}) )";
-                case DateType.Month:
-                    return $" (  ( DATE_PART('Year',  {end}   ) - DATE_PART('Year',  {begin}) ) * 12 + (DATE_PART('month', {end}) - DATE_PART('month', {begin})) )";
-                case DateType.Day:
-                    return $" ( DATE_PART('day', {end} - {begin}) )";
-                case DateType.Hour:
-                    return $" ( ( DATE_PART('day', {end} - {begin}) ) * 24 + DATE_PART('hour', {end} - {begin} ) )";
-                case DateType.Minute:
-                    return $" ( ( ( DATE_PART('day', {end} - {begin}) ) * 24 + DATE_PART('hour', {end} - {begin} ) ) * 60 + DATE_PART('minute', {end} - {begin} ) )";
-                case DateType.Second:
-                    return $" ( ( ( DATE_PART('day', {end} - {begin}) ) * 24 + DATE_PART('hour', {end} - {begin} ) ) * 60 + DATE_PART('minute', {end} - {begin} ) ) * 60 + DATE_PART('second', {end} - {begin} )";
-                case DateType.Millisecond:
-                    break;
-                default:
-                    break;
-            }
-            throw new Exception(parameter + " datediff no support");
-        }
-        public override string IIF(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            var parameter3 = model.Args[2];
-            if (parameter.Type == UtilConstants.BoolType) 
-            {
-                parameter.MemberName = parameter.MemberName.ToString().Replace("=1", "=true");
-                parameter2.MemberName = false;
-                parameter3.MemberName = true;
-            }
-            return string.Format("( CASE  WHEN {0} THEN {1}  ELSE {2} END )", parameter.MemberName, parameter2.MemberName, parameter3.MemberName);
-        }
-        public override string DateValue(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            var format = "dd";
-            if (parameter2.MemberValue.ObjToString() == DateType.Year.ToString())
-            {
-                format = "yyyy";
-            }
-            if (parameter2.MemberValue.ObjToString() == DateType.Month.ToString())
-            {
-                format = "MM";
-            }
-            if (parameter2.MemberValue.ObjToString() == DateType.Day.ToString())
-            {
-                format = "dd";
-            }
-            if (parameter2.MemberValue.ObjToString() == DateType.Hour.ToString())
-            {
-                format = "hh";
-            }
-            if (parameter2.MemberValue.ObjToString() == DateType.Minute.ToString())
-            {
-                format = "mi";
-            }
-            if (parameter2.MemberValue.ObjToString() == DateType.Second.ToString())
-            {
-                format = "ss";
-            }
-            if (parameter2.MemberValue.ObjToString() == DateType.Millisecond.ToString())
-            {
-                format = "ms";
-            }
-            if (parameter2.MemberValue.ObjToString() == DateType.Weekday.ToString())
-            {
-                return $"  extract(DOW FROM cast({parameter.MemberName} as TIMESTAMP)) ";
-            }
- 
-            return string.Format(" cast( to_char({1},'{0}')as integer ) ", format, parameter.MemberName);
-        }
-
-        public override string Contains(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            return string.Format(" ({0} like concat('%',{1},'%')) ", parameter.MemberName, parameter2.MemberName  );
-        }
-
-        public override string StartsWith(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            return string.Format(" ({0} like concat({1},'%')) ", parameter.MemberName, parameter2.MemberName);
-        }
-
-        public override string EndsWith(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            return string.Format(" ({0} like concat('%',{1}))", parameter.MemberName,parameter2.MemberName);
-        }
-
-        public override string DateIsSameDay(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            return string.Format(" ( to_char({0},'yyyy-MM-dd')=to_char({1},'yyyy-MM-dd') ) ", parameter.MemberName, parameter2.MemberName); ;
-        }
-
-        public override string HasValue(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            return string.Format("( {0} IS NOT NULL )", parameter.MemberName);
-        }
-
-        public override string DateIsSameByType(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            var parameter3 = model.Args[2];
-            DateType dateType =(DateType)parameter3.MemberValue;
-            var format = "yyyy-MM-dd";
-            if (dateType == DateType.Quarter)
-            {
-                return string.Format(" (date_trunc('quarter',{0})=date_trunc('quarter',{1}) ) ", parameter.MemberName, parameter2.MemberName,format);
-            }
-            switch (dateType)
-            {
-                case DateType.Year:
-                    format = "yyyy";
-                    break;
-                case DateType.Month:
-                    format = "yyyy-MM";
-                    break;
-                case DateType.Day:
-                    break;
-                case DateType.Hour:
-                    format = "yyyy-MM-dd HH";
-                    break;
-                case DateType.Second:
-                    format = "yyyy-MM-dd HH:mm:ss";
-                    break;
-                case DateType.Minute:
-                    format = "yyyy-MM-dd HH:mm";
-                    break;
-                case DateType.Millisecond:
-                    format = "yyyy-MM-dd HH:mm.ms";
-                    break;
-                default:
-                    break;
-            }
-            return string.Format(" ( to_char({0},'{2}')=to_char({1},'{2}') ) ", parameter.MemberName, parameter2.MemberName, format);
-        }
-
-        public override string ToDate(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS timestamp)", parameter.MemberName);
-        }
-        public override string DateAddByType(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            var parameter3 = model.Args[2];
-            return string.Format(" ({1} +  ({2}||'{0}')::INTERVAL) ", parameter3.MemberValue, parameter.MemberName, parameter2.MemberName);
-        }
-
-        public override string DateAddDay(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter2 = model.Args[1];
-            return string.Format(" ({0} + ({1}||'day')::INTERVAL) ", parameter.MemberName, parameter2.MemberName);
-        }
-
+        public MongoNestedTranslatorContext  context { get; set; }
         public override string ToInt32(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS INT4)", parameter.MemberName);
+            var item =model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var toIntDoc = new BsonDocument("$toInt", GetMemberName(memberName));
+            return toIntDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
         public override string ToInt64(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS INT8)", parameter.MemberName);
-        }
-
-        public override string ToString(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS VARCHAR)", parameter.MemberName);
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var toLongDoc = new BsonDocument("$toLong", GetMemberName(memberName));
+            return toLongDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
         public override string ToGuid(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS UUID)", parameter.MemberName);
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            // MongoDB 没有直接的 Guid 类型，通常以字符串存储
+            var toStringDoc = new BsonDocument("$toString", GetMemberName(memberName));
+            return toStringDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
         public override string ToDouble(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS DECIMAL(18,4))", parameter.MemberName);
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var toDoubleDoc = new BsonDocument("$toDouble", GetMemberName(memberName));
+            return toDoubleDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
         public override string ToBool(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS boolean)", parameter.MemberName);
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var toBoolDoc = new BsonDocument("$toBool", GetMemberName(memberName));
+            return toBoolDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
-        public override string ToDecimal(MethodCallExpressionModel model)
+        public override string ToDate(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            return string.Format(" CAST({0} AS DECIMAL(18,4))", parameter.MemberName);
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var toDateDoc = new BsonDocument("$toDate", GetMemberName(memberName));
+            return toDateDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+
+        public override string ToTime(MethodCallExpressionModel model)
+        {
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            // MongoDB 没有单独的 Time 类型，通常用字符串或日期处理
+            var toStringDoc = new BsonDocument("$toString", GetMemberName(memberName));
+            return toStringDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+        public override string AggregateCount(MethodCallExpressionModel model)
+        {
+            var index = context.queryBuilder.LambdaExpressions.Index;
+            var name = "count" + index;
+            var item=model.Args.First().MemberValue;
+            BsonValue arg = new ExpressionVisitor(context).Visit(item as Expression); 
+            if (arg is BsonString str && !str.AsString.StartsWith("$"))
+            {
+                arg = "$" + str.AsString;
+            }
+            var countExpression = new BsonDocument(name, new BsonDocument("$sum",1));
+            var result= countExpression.ToJson(SqlSugar.MongoDb.UtilMethods.GetJsonWriterSettings());
+            context.queryBuilder.GroupByValue += $"({UtilConstants.ReplaceCommaKey}({result}){UtilConstants.ReplaceCommaKey})";
+            context.queryBuilder.LambdaExpressions.Index++;
+            return name;
+        }
+
+        public override string AggregateMax(MethodCallExpressionModel model)
+        {
+            var index = context.queryBuilder.LambdaExpressions.Index;
+            var name = "max" + index;
+            var item = model.Args.First().MemberValue;
+            BsonValue arg = new ExpressionVisitor(context).Visit(item as Expression);
+            if (arg is BsonString str && !str.AsString.StartsWith("$"))
+            {
+                arg = "$" + str.AsString;
+            }
+            var maxExpression = new BsonDocument(name, new BsonDocument("$max", arg));
+            var result = maxExpression.ToJson(SqlSugar.MongoDb.UtilMethods.GetJsonWriterSettings());
+            context.queryBuilder.GroupByValue += $"({UtilConstants.ReplaceCommaKey}({result}){UtilConstants.ReplaceCommaKey})";
+            context.queryBuilder.LambdaExpressions.Index++;
+            return name;
+        }
+
+        public override string AggregateMin(MethodCallExpressionModel model)
+        {
+            var index = context.queryBuilder.LambdaExpressions.Index;
+            var name = "min" + index;
+            var item = model.Args.First().MemberValue;
+            BsonValue arg = new ExpressionVisitor(context).Visit(item as Expression);
+            if (arg is BsonString str && !str.AsString.StartsWith("$"))
+            {
+                arg = "$" + str.AsString;
+            }
+            var minExpression = new BsonDocument(name, new BsonDocument("$min", arg));
+            var result = minExpression.ToJson(SqlSugar.MongoDb.UtilMethods.GetJsonWriterSettings());
+            context.queryBuilder.GroupByValue += $"({UtilConstants.ReplaceCommaKey}({result}){UtilConstants.ReplaceCommaKey})";
+            context.queryBuilder.LambdaExpressions.Index++;
+            return name;
+        }
+
+        public override string AggregateAvg(MethodCallExpressionModel model)
+        {
+            var index = context.queryBuilder.LambdaExpressions.Index;
+            var name = "avg" + index;
+            var item = model.Args.First().MemberValue;
+            BsonValue arg = new ExpressionVisitor(context).Visit(item as Expression);
+            if (arg is BsonString str && !str.AsString.StartsWith("$"))
+            {
+                arg = "$" + str.AsString;
+            }
+            var avgExpression = new BsonDocument(name, new BsonDocument("$avg", arg));
+            var result = avgExpression.ToJson(SqlSugar.MongoDb.UtilMethods.GetJsonWriterSettings());
+            context.queryBuilder.GroupByValue += $"({UtilConstants.ReplaceCommaKey}({result}){UtilConstants.ReplaceCommaKey})";
+            context.queryBuilder.LambdaExpressions.Index++;
+            return name;
+        }
+
+        public override string AggregateSum(MethodCallExpressionModel model)
+        {
+            var index = context.queryBuilder.LambdaExpressions.Index;
+            var name = "sum" + index;
+            var item = model.Args.First().MemberValue;
+            BsonValue arg = new ExpressionVisitor(context).Visit(item as Expression);
+            if (arg is BsonString str && !str.AsString.StartsWith("$"))
+            {
+                arg = "$" + str.AsString;
+            }
+            var sumExpression = new BsonDocument(name, new BsonDocument("$sum", arg));
+            var result = sumExpression.ToJson(SqlSugar.MongoDb.UtilMethods.GetJsonWriterSettings());
+            context.queryBuilder.GroupByValue += $"({UtilConstants.ReplaceCommaKey}({result}){UtilConstants.ReplaceCommaKey})";
+            context.queryBuilder.LambdaExpressions.Index++;
+            return name;
+        } 
+        public override string Contains(MethodCallExpressionModel model)
+        {
+            var item = model.Args.First().MemberValue;
+            BsonValue right = new ExpressionVisitor(context).Visit(item as Expression);
+            BsonValue left = new ExpressionVisitor(context).Visit(model.DataObject as Expression);
+            // 构造 $regex 匹配
+            var regexDoc = new BsonDocument
+            {
+                { "$regex", right },        // right 是普通字符串值，例如 "a"
+                { "$options", "i" }         // 忽略大小写
+            }; 
+            var match=new BsonDocument
+                {
+                    { left.ToString(), regexDoc }
+                };
+            return match.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+        public override string StartsWith(MethodCallExpressionModel model)
+        {
+            var item = model.Args.First().MemberValue;
+            BsonValue right = new ExpressionVisitor(context).Visit(item as Expression);
+            BsonValue left = new ExpressionVisitor(context).Visit(model.DataObject as Expression);
+            // 构造 $regex 匹配，^ 表示以...开头
+            var regexPattern = "^" + right.ToString();
+            var regexDoc = new BsonDocument
+            {
+                { "$regex", regexPattern },
+                { "$options", "i" }
+            };
+            var match =new BsonDocument
+                {
+                    { left.ToString(), regexDoc }
+                };
+            return match.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+        public override string EndsWith(MethodCallExpressionModel model)
+        {
+            var item = model.Args.First().MemberValue;
+            BsonValue right = new ExpressionVisitor(context).Visit(item as Expression);
+            BsonValue left = new ExpressionVisitor(context).Visit(model.DataObject as Expression);
+            // 构造 $regex 匹配，$ 表示以...结尾
+            var regexPattern = right.ToString() + "$";
+            var regexDoc = new BsonDocument
+            {
+                { "$regex", regexPattern },
+                { "$options", "i" }
+            };
+            var match = new BsonDocument
+                {
+                    { left.ToString(), regexDoc }
+                };
+            return match.ToJson(UtilMethods.GetJsonWriterSettings());
+        } 
+        public override string ToDateShort(MethodCallExpressionModel model)
+        {
+            var item = model.Args.First().MemberValue;
+            BsonValue itemValue = new ExpressionVisitor(context).Visit(item as Expression);
+            var dateTruncDoc = new BsonDocument("$dateTrunc", new BsonDocument
+            {
+                { "date", $"${itemValue}" },
+                { "unit", "day" }
+            });
+            return dateTruncDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+        public override string DateAddByType(MethodCallExpressionModel model)
+        {  
+            var dateExpr = model.DataObject;
+            var numberExpr = model.Args[0].MemberValue;
+            var typeExpr = model.Args[1].MemberValue; 
+            BsonValue dateValue = new ExpressionVisitor(context).Visit(dateExpr as Expression);
+            BsonValue numberValue = new ExpressionVisitor(context).Visit(numberExpr as Expression);
+            var dateType = (DateType)typeExpr;
+
+            string unit = dateType switch
+            {
+                DateType.Year => "year",
+                DateType.Month => "month",
+                DateType.Day => "day",
+                DateType.Hour => "hour",
+                DateType.Minute => "minute",
+                DateType.Second => "second",
+                DateType.Millisecond => "millisecond",
+                _ => throw new NotSupportedException($"不支持的DateType: {dateType}")
+            };
+
+            var dateAddDoc = new BsonDocument("$dateAdd", new BsonDocument
+            {
+                { "startDate", $"${dateValue}" },
+                { "unit", unit },
+                { "amount", numberValue }
+            });
+
+            return dateAddDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+        public override string DateValue(MethodCallExpressionModel model)
+        {
+            var item = model.Args.First().MemberValue;
+            BsonValue itemValue = new ExpressionVisitor(context).Visit(item as Expression);
+            var dateType = (DateType)model.Args.Last().MemberValue;
+            switch (dateType)
+            {
+                case DateType.Year:
+                    // MongoDB $year 操作符
+                    return new BsonDocument("$year", $"${itemValue}").ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Month:
+                    return new BsonDocument("$month", $"${itemValue}").ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Day:
+                    return new BsonDocument("$dayOfMonth", $"${itemValue}").ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Hour:
+                    return new BsonDocument("$hour", $"${itemValue}").ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Minute:
+                    return new BsonDocument("$minute", $"${itemValue}").ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Second:
+                    return new BsonDocument("$second", $"${itemValue}").ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Millisecond:
+                    return new BsonDocument("$millisecond", $"${itemValue}").ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Weekday:
+                    return new BsonDocument("$subtract", new BsonArray
+                    {
+                        new BsonDocument("$dayOfWeek", $"${itemValue}"),
+                        1
+                    }).ToJson(UtilMethods.GetJsonWriterSettings());
+                case DateType.Quarter:
+                    // MongoDB 没有直接的quarter操作符，需自定义表达式
+                    var expr = new BsonDocument("$add", new BsonArray
+                    {
+                        new BsonDocument("$divide", new BsonArray
+                        {
+                            new BsonDocument("$subtract", new BsonArray
+                            {
+                                new BsonDocument("$month", $"${itemValue}"),
+                                1
+                            }),
+                            3
+                        }),
+                        1
+                    });
+             return expr.ToJson(UtilMethods.GetJsonWriterSettings()); 
+            }
+            return null;
+        } 
+        public override string ToString(MethodCallExpressionModel model)
+        {
+            var item = model.DataObject as Expression;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+
+            if (model.Args == null || model.Args.Count == 0)
+            {
+                // 只有 ToString()，直接转字符串
+                var toStringDoc = new BsonDocument("$toString", GetMemberName(memberName));
+                return toStringDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+            }
+            else if (model.Args.Count == 1)
+            {
+                var format = (model.Args.First().MemberValue).ObjToString().TrimStart('"').TrimEnd('"');
+                // 先判断类型
+                var type = (item as MemberExpression)?.Type ?? (item as UnaryExpression)?.Type;
+                if (type == typeof(DateTime) || type == typeof(DateTime?))
+                {
+                    // C#格式转MongoDB格式
+                    string mongoFormat = ConvertCSharpDateFormatToMongo(format);
+                    var dateToStringDoc = new BsonDocument("$dateToString", new BsonDocument
+                    {
+                        { "format", mongoFormat },
+                        { "date", GetMemberName(memberName) }
+                    });
+                    return dateToStringDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+                }
+                else if (UtilConstants.NumericalTypes.Contains(type))
+                {
+                    // 数字格式化，MongoDB不支持C#的数字格式，需要先转字符串再在C#端格式化
+                    // 这里只能简单转字符串
+                    var toStringDoc = new BsonDocument("$toString", GetMemberName(memberName));
+                    return toStringDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+                }
+                else
+                {
+                    // 其他类型直接转字符串
+                    var toStringDoc = new BsonDocument("$toString", GetMemberName(memberName));
+                    return toStringDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+                }
+            }
+            else
+            {
+                throw new NotSupportedException("ToString 只支持0或1个参数");
+            }
+        }
+        public override string ToUpper(MethodCallExpressionModel model)
+        {
+            var item = model.DataObject as Expression;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var toUpperDoc = new BsonDocument("$toUpper", GetMemberName(memberName));
+            return toUpperDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+        public override string ToLower(MethodCallExpressionModel model)
+        {
+            var item = model.DataObject as Expression;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var toLowerDoc = new BsonDocument("$toLower", GetMemberName(memberName));
+            return toLowerDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+        public override string Abs(MethodCallExpressionModel model)
+        {
+            // 取绝对值，MongoDB $abs 操作符
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var absDoc = new BsonDocument("$abs", GetMemberName(memberName));
+            return absDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+
+        public override string Round(MethodCallExpressionModel model)
+        {
+            // 四舍五入，MongoDB $round 操作符
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var roundDoc = new BsonDocument("$round", new BsonArray { GetMemberName(memberName) });
+            return roundDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+
+      public override string Floor(MethodCallExpressionModel model)
+        {
+            // 向下取整，MongoDB $floor 操作符
+            var item = model.Args[0].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var floorDoc = new BsonDocument("$floor", GetMemberName(memberName));
+            return floorDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+
+        public override string Substring(MethodCallExpressionModel model)
+        {
+            // 截取字符串，MongoDB $substr 操作符（推荐 $substrBytes）
+            var item = model.DataObject as Expression;
+            var start = model.Args[0].MemberValue;
+            var length = model.Args[1].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item);
+            BsonValue startValue = new ExpressionVisitor(context).Visit(start as Expression);
+            BsonValue lengthValue = new ExpressionVisitor(context).Visit(length as Expression);
+            var substrDoc = new BsonDocument("$substrBytes", new BsonArray { GetMemberName(memberName), startValue, lengthValue });
+            return substrDoc.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+
+        public override string Replace(MethodCallExpressionModel model)
+        {
+            // 替换字符串，MongoDB $replaceAll 操作符
+            var item = model.DataObject as Expression;
+            var find = model.Args[0].MemberValue;
+            var replacement = model.Args[1].MemberValue;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item);
+            BsonValue findValue = new ExpressionVisitor(context).Visit(find as Expression);
+            BsonValue replacementValue = new ExpressionVisitor(context).Visit(replacement as Expression);
+            var replaceDoc = new BsonDocument("$replaceAll", new BsonDocument
+            {
+                { "input", GetMemberName(memberName) },
+                { "find", findValue },
+                { "replacement", replacementValue }
+            });
+            return replaceDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
         public override string Length(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            return string.Format(" LENGTH({0})", parameter.MemberName);
+            // 字符串长度，MongoDB $strLenBytes 操作符
+            var item = model.Args[0].MemberValue ?? model.DataObject;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var lengthDoc = new BsonDocument("$strLenBytes", GetMemberName(memberName));
+            return lengthDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
-        public override string MergeString(params string[] strings)
+         
+
+        public override string IsNullOrEmpty(MethodCallExpressionModel model)
         {
-            return " concat("+string.Join(",", strings).Replace("+", "") + ") ";
+            // 获取字段名表达式
+            var item = model.Args[0].MemberValue ?? model.DataObject;
+            var fieldExpr = new ExpressionVisitor(context).Visit(item as Expression);
+
+            string fieldName = fieldExpr.ToString();
+
+            // 生成：{ "$match": { "$or": [ { "Name": null }, { "Name": "" } ] } }
+            var or=new BsonDocument(
+                "$or", new BsonArray
+                {
+            new BsonDocument(fieldName, BsonNull.Value),
+            new BsonDocument(fieldName, "")
+                });
+
+            return or.ToJson(UtilMethods.GetJsonWriterSettings());
         }
-        public override string IsNull(MethodCallExpressionModel model)
+         
+        public override string Trim(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            var parameter1 = model.Args[1];
-            return string.Format("(CASE WHEN  {0} IS NULL THEN  {1} ELSE {0} END)", parameter.MemberName, parameter1.MemberName);
-        }
-        public override string GetDate()
-        {
-            return " current_timestamp ";
-        }
-        public override string GetRandom()
-        {
-            return "RANDOM()";
+            // 去除首尾空格，MongoDB $trim 操作符
+            var item = model.Args[0].MemberValue ?? model.DataObject;
+            BsonValue memberName = new ExpressionVisitor(context).Visit(item as Expression);
+            var trimDoc = new BsonDocument("$trim", new BsonDocument { { "input", GetMemberName(memberName) } });
+            return trimDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
-        public override string EqualTrue(string fieldName)
+        public override string ContainsArray(MethodCallExpressionModel model)
         {
-            return "( " + fieldName + "=true )";
+            // 解析数组表达式和待判断的元素表达式
+            var arrayExp = model.DataObject as Expression; 
+            var itemExp = model.Args[0].MemberValue as Expression;
+            if (arrayExp == null)
+            {
+                arrayExp = model.Args[0].MemberValue as Expression;
+                itemExp = model.Args[1].MemberValue as Expression;
+            }
+
+            // 获取字段名
+            BsonValue fieldName = new ExpressionVisitor(context).Visit(itemExp);
+
+            // 获取数组值
+            var arrayObj = ExpressionTool.DynamicInvoke(arrayExp) as IEnumerable;
+            if (arrayObj == null)
+                return null;
+           var name=fieldName.ToString();
+            // 构建BsonArray
+            var bsonArray = new BsonArray();
+            foreach (var val in arrayObj)
+            {
+                if (val == null)
+                    bsonArray.Add(BsonNull.Value);
+                else if (name == "_id") 
+                {
+                    bsonArray.Add(BsonValue.Create(ObjectId.Parse(val?.ToString())));
+                }
+                else
+                    bsonArray.Add(BsonValue.Create(val));
+            }
+
+            // 构建MongoDB的 $in 查询表达式
+            var inDoc = new BsonDocument(name, new BsonDocument("$in", bsonArray));
+            return inDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
 
-        public override string JsonField(MethodCallExpressionModel model)
+        public override string ContainsArrayUseSqlParameters(MethodCallExpressionModel model)
         {
-            var parameter = model.Args[0];
-            var parameter1 = model.Args[1];
-            //var parameter2 = model.Args[2];
-            //var parameter3= model.Args[3];
-            var result= GetJson(parameter.MemberName, parameter1.MemberName, model.Args.Count()==2);
-            if (model.Args.Count > 2) 
-            {
-               result = GetJson(result, model.Args[2].MemberName, model.Args.Count() == 3);
-            }
-            if (model.Args.Count > 3)
-            {
-                result = GetJson(result, model.Args[3].MemberName, model.Args.Count() == 4);
-            }
-            if (model.Args.Count > 4)
-            {
-                result = GetJson(result, model.Args[4].MemberName, model.Args.Count() == 5);
-            }
-            if (model.Args.Count > 5)
-            {
-                result = GetJson(result, model.Args[5].MemberName, model.Args.Count() == 6);
-            }
-            return result;
-        }
-
-        public override string JsonContainsFieldName(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            var parameter1 = model.Args[1];
-            return $"({parameter.MemberName}::jsonb ?{parameter1.MemberName})";
-        }
-
-        private string GetJson(object memberName1, object memberName2,bool isLast)
-        {
-            if (isLast)
-            {
-                return $"({memberName1}::json->>{memberName2})";
-            }
-            else 
-            {
-                return $"({memberName1}->{memberName2})";
-            }
-        }
-
-        public override string JsonArrayLength(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            //var parameter1 = model.Args[1];
-            return $" json_array_length({parameter.MemberName}::json) ";
-        }
-
-        public override string JsonParse(MethodCallExpressionModel model)
-        {
-            var parameter = model.Args[0];
-            //var parameter1 = model.Args[1];
-            return $" ({parameter.MemberName}::json) ";
+            return this.ContainsArray(model);
         }
 
         public override string JsonArrayAny(MethodCallExpressionModel model)
         {
-            if (SqlSugar.UtilMethods.IsNumber(model.Args[1].MemberValue.GetType().Name))
+            // 伪代码步骤：
+            // 1. 获取数组字段表达式 arrayField
+            // 2. 获取要判断的元素表达式 pars
+            // 3. 解析字段名和元素值
+            // 4. 构造 MongoDB $in 查询表达式：{ arrayField: { $in: [element] } }
+            // 5. 返回 JSON 字符串
+
+            var arrayFieldExpr = model.DataObject as Expression;
+            var elementExpr = model.Args[0].MemberValue as Expression;
+
+            // 获取字段名
+            BsonValue fieldName = new ExpressionVisitor(context).Visit(arrayFieldExpr);
+            // 获取元素值
+            var elementValue = ExpressionTool.DynamicInvoke(elementExpr);
+            if (elementValue is string s&&UtilMethods.IsValidObjectId(s)) 
             {
-                return $" {model.Args[0].MemberName}::jsonb @> '[{model.Args[1].MemberValue.ObjToStringNoTrim().ToSqlFilter()}]'::jsonb";
+                elementValue = ObjectId.Parse(s);
             }
-            else 
-            {
-                return $" {model.Args[0].MemberName}::jsonb @> '[\"{model.Args[1].MemberValue}\"]'::jsonb";
-            }
+            // 构造 $in 查询表达式
+            var inDoc = new BsonDocument(fieldName.ToString(), new BsonDocument("$in", new BsonArray { BsonValue.Create(elementValue) }));
+            return inDoc.ToJson(UtilMethods.GetJsonWriterSettings());
         }
-        public override string JsonListObjectAny(MethodCallExpressionModel model)
+
+        public override string IIF(MethodCallExpressionModel model)
+        { 
+
+            var test = model.Args[0].MemberValue as Expression;
+            var ifTrue = model.Args[1].MemberValue as Expression;
+            var ifFalse = model.Args[2].MemberValue as Expression;
+
+            // 构造 ConditionalExpression
+            var conditionalExpr = Expression.Condition(test, ifTrue, ifFalse);
+
+            BsonValue testValue = new ConditionalExpressionTractor(context, null).Extract(conditionalExpr);
+            return testValue.ToJson(UtilMethods.GetJsonWriterSettings());
+        }
+
+        #region  Helper 
+        private static BsonValue GetMemberName(BsonValue memberName)
         {
-            if (SqlSugar.UtilMethods.IsNumber(model.Args[2].MemberValue.GetType().Name))
-            {
-                return $" {model.Args[0].MemberName}::jsonb @> '[{{\"{model.Args[1].MemberValue}\":{model.Args[2].MemberValue}}}]'::jsonb";
-            }
-            else
-            {
-                return $" {model.Args[0].MemberName}::jsonb @> '[{{\"{model.Args[1].MemberValue}\":\"{model.Args[2].MemberValue.ObjToStringNoTrim().ToSqlFilter()}\"}}]'::jsonb";
-            }
+            return UtilMethods.GetMemberName(memberName);
         }
+
+        /// <summary>
+        /// Converts a C# date format string to a MongoDB-compatible date format string.
+        /// </summary>
+        /// <param name="csharpFormat">The C# date format string.</param>
+        /// <returns>The MongoDB-compatible date format string.</returns>
+        public string ConvertCSharpDateFormatToMongo(string csharpFormat)
+        {
+            if (string.IsNullOrEmpty(csharpFormat))
+            {
+                throw new ArgumentNullException(nameof(csharpFormat), "Date format cannot be null or empty.");
+            }
+
+            // Replace C# date format specifiers with MongoDB equivalents
+            return csharpFormat
+                .Replace("yyyy", "%Y")
+                .Replace("MM", "%m")
+                .Replace("dd", "%d")
+                .Replace("HH", "%H")
+                .Replace("mm", "%M")
+                .Replace("ss", "%S")
+                .Replace("fff", "%L"); // Milliseconds
+        }
+        #endregion
     }
 }

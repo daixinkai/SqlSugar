@@ -1,9 +1,12 @@
-﻿using MongoDB.Bson;
+﻿using Dm;
+using Dm.util;
+using MongoDB.Bson;
 using Newtonsoft.Json.Linq; 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace SqlSugar.MongoDb
@@ -12,7 +15,17 @@ namespace SqlSugar.MongoDb
     {
         MongoNestedTranslatorContext _context;
         ExpressionVisitorContext _visitorContext;
-
+        Dictionary<string, DateType> dateTypeNames = new Dictionary<string, DateType>
+          {
+              { "Year", DateType.Year },
+              { "Month", DateType.Month },
+              { "Day", DateType.Day },
+              { "Hour", DateType.Hour },
+              { "Minute", DateType.Minute },
+              { "Second", DateType.Second },
+              { "Millisecond", DateType.Millisecond },
+              { "DayOfWeek", DateType.Weekday }
+          };
         public FieldPathExtractor(MongoNestedTranslatorContext context, ExpressionVisitorContext visitorContext)
         {
             _context = context;
@@ -23,11 +36,42 @@ namespace SqlSugar.MongoDb
         {
             var oldExp = expr;
             var oldMember = expr as MemberExpression;
-            if (ExpressionTool.GetParameters(expr).Count == 0) 
-            { 
+            if (ExpressionTool.GetParameters(expr).Count == 0)
+            {
                 var value = ExpressionTool.GetMemberValue(oldMember.Member, oldExp);
-                return BsonValue.Create(value);
-            } 
+                return UtilMethods.MyCreate(value);
+            }
+            else if (IsLength(oldMember))
+            {
+                var memberExp = (expr as MemberExpression);
+                var method = new MongoDbMethod() { context = _context };
+                var model = new MethodCallExpressionModel() { Args = new List<MethodCallExpressionArgs>() };
+                model.Args.Add(new MethodCallExpressionArgs() { MemberValue = memberExp.Expression });
+                return BsonDocument.Parse(method.Length(model));
+            }
+            else if (IsDateProperty(expr))
+            {
+                var memberExp = (expr as MemberExpression);
+                var method = new MongoDbMethod() { context = _context };
+                var model = new MethodCallExpressionModel() { Args = new List<MethodCallExpressionArgs>() };
+                if (memberExp.Member.Name == "Date")
+                {
+                    model.Args.Add(new MethodCallExpressionArgs() { MemberValue = memberExp.Expression });
+                    return BsonDocument.Parse(method.ToDateShort(model));
+                }
+                else if (dateTypeNames.TryGetValue(memberExp.Member.Name, out var dateType))
+                {
+                    model.Args.Add(new MethodCallExpressionArgs() { MemberValue = memberExp.Expression });
+                    model.Args.Add(new MethodCallExpressionArgs() { MemberValue = dateType });
+                    return BsonDocument.Parse(method.DateValue(model));
+                }
+            }
+            return ExtractFieldPath(expr);
+        }
+        
+
+        private BsonValue ExtractFieldPath(Expression expr)
+        {
             var parts = new Stack<string>();
 
             while (expr is MemberExpression member)
@@ -40,19 +84,107 @@ namespace SqlSugar.MongoDb
             {
                 _visitorContext.ExpType = typeof(MemberExpression);
             }
-            if (parts.Count == 1&& expr is ParameterExpression parameter) 
+            string resultString = GenerateFieldPath(expr, parts);
+            var isJoin = this._context?.queryBuilder?.IsSingle() == false;
+            var shortName = ((ParameterExpression)expr)?.Name;
+            var joinInfo = this._context?.queryBuilder?.JoinQueryInfos?.FirstOrDefault(it => it.ShortName.EqualCase(shortName));
+            bool isObj = ProcessJoinFieldPath(ref resultString, ref shortName, joinInfo);
+            if (isObj)
+                return BsonDocument.Parse(resultString);
+            else
+                return UtilMethods.MyCreate(resultString);
+        }
+
+        private bool ProcessJoinFieldPath(ref string resultString, ref string shortName, JoinQueryInfo joinInfo)
+        {
+            var isObj = false;
+            if (joinInfo != null)
             {
-                if (_context?.context != null)
+                shortName = $"{joinInfo.ShortName}.";
+                if (this._context.resolveType.IsIn(ResolveExpressType.SelectSingle, ResolveExpressType.SelectMultiple))
                 {
-                    var entityInfo = _context.context.EntityMaintenance.GetEntityInfo(parameter.Type);
-                    var columnInfo = entityInfo.Columns.FirstOrDefault(s => s.PropertyName == parts.First());
-                    if (columnInfo != null)
-                    {
-                        return BsonValue.Create(columnInfo.DbColumnName);
-                    }
+                    // 构造 $ifNull 表达式
+                    var columnString = $"{{ \"$ifNull\": [\"${joinInfo.ShortName}.{resultString}\", null] }}";
+                    resultString = columnString;
+                    isObj = true;
+                }
+                else
+                {
+                    resultString = $"{joinInfo.ShortName}.{resultString}";
                 }
             }
-            return BsonValue.Create(string.Join(".", parts));
+            resultString = TransformFieldPath(resultString, shortName);
+            return isObj;
+        }
+
+        private string GenerateFieldPath(Expression expr, Stack<string> parts)
+        {
+            string resultString = null;
+            if (parts.Count == 1 && expr is ParameterExpression parameter && _context?.context != null)
+            {
+                var entityInfo = _context.context.EntityMaintenance.GetEntityInfo(parameter.Type);
+                var columnInfo = entityInfo.Columns.FirstOrDefault(s => s.PropertyName == parts.First());
+                if (columnInfo != null)
+                {
+                    resultString = columnInfo.DbColumnName;
+                }
+                else
+                {
+                    resultString = string.Join(".", parts);
+                }
+            }
+            else
+            {
+                resultString = string.Join(".", parts);
+            }
+
+            return resultString;
+        }
+
+        private static bool IsDateProperty(Expression expr)
+        {
+            return !string.IsNullOrEmpty(BinaryExpressionTranslator.GetSystemDateMemberName(expr));
+        } 
+        private static bool IsLength(MemberExpression oldMember)
+        {
+            if (oldMember.Member.Name != "Length")
+                return false;
+
+            var expressionType = oldMember.Expression?.Type;
+            if (expressionType == null)
+                return false;
+
+            return expressionType.IsArray
+                || expressionType == typeof(string)
+                || expressionType.FullName == "System.Span`1"
+                || expressionType.FullName == "System.ReadOnlySpan`1";
+        }
+        private string TransformFieldPath(string resultString, string shortName)
+        {
+            if (this._context?.queryBuilder is MongoDbQueryBuilder mb && mb.EasyJoin == false)
+            {
+                if (mb.FirstParameter == shortName.TrimEnd('.'))
+                {
+                    var letKey = GetLetKey(resultString);
+                    if (!mb.lets.ContainsKey(letKey))
+                    {
+                        mb.lets.Add(letKey, $"${resultString}");
+                    }
+                    resultString = $"$${letKey}";
+                }
+                else if (mb.LastParameter == shortName.TrimEnd('.'))
+                {
+                    var replaceName = shortName.TrimEnd('.') + ".";
+                    resultString = $"${resultString.TrimStart(replaceName.toCharArray())}";
+                }
+            }
+
+            return resultString;
+        }
+
+        private static string GetLetKey(string resultString)
+        {
+            return $"let_{resultString}";
         }
     }
 

@@ -22,7 +22,14 @@ namespace SqlSugar.MongoDb
         }
 
         private static BsonDocument ComparisonNotKeyValue(BsonValue field, BsonValue value, string op)
-        {
+        {   // 如果 field 是一个表达式对象（如 BsonDocument），则使用 $expr
+            if (field is BsonDocument bd)
+            {
+                return new BsonDocument
+                {
+                    { "$expr", new BsonDocument(op, new BsonArray { field, value }) }
+                };
+            }
             var leftKey = field.ToString();
             return new BsonDocument
                    {
@@ -44,12 +51,23 @@ namespace SqlSugar.MongoDb
                 return GetOtherResult(op, leftValue, rightValue); 
         }
 
-        private static BsonDocument GetOtherResult(string op, string leftValue, BsonValue rightValue)
+        private BsonDocument GetOtherResult(string op, string leftValue, BsonValue rightValue)
         {
-            return new BsonDocument
+            if (_visitorContext?.IsText == true)
+            {
+                // 三元条件格式: { "$gt": ["$Age", 0] }
+                return new BsonDocument
+                {
+                    { op, new BsonArray {UtilMethods.GetMemberName(leftValue), rightValue } }
+                };
+            }
+            else
+            {
+                return new BsonDocument
                     {
                         { leftValue, new BsonDocument { { op, rightValue } } }
                     };
+            }
         }
 
         private static BsonDocument GetEqResult(string leftValue, BsonValue rightValue)
@@ -80,7 +98,7 @@ namespace SqlSugar.MongoDb
 
         private BsonValue GetRightValue(EntityColumnInfo  entityColumnInfo, BsonValue rightValue)
         {
-            if (entityColumnInfo?.IsPrimarykey==true) 
+            if (entityColumnInfo?.IsPrimarykey==true||entityColumnInfo?.DataType==nameof(ObjectId)) 
             {
                 rightValue=ObjectId.Parse(rightValue?.ToString());
             }

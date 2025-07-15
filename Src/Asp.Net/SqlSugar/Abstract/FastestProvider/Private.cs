@@ -24,7 +24,10 @@ namespace SqlSugar
                     result2.DbFastestProperties.IsOffIdentity = this.IsOffIdentity;
                     return result2;
                 case DbType.Sqlite:
-                    return new SqliteFastBuilder(this.entityInfo);
+                    var resultSqlite= new SqliteFastBuilder(this.entityInfo);
+                    if (resultSqlite.DbFastestProperties != null)
+                        resultSqlite.DbFastestProperties.IsIgnoreInsertError = this.IsIgnoreInsertError;
+                    return resultSqlite;
                 case DbType.Oracle:
                     return new OracleFastBuilder(this.entityInfo);
                 case DbType.PostgreSQL:
@@ -226,6 +229,10 @@ namespace SqlSugar
         private DataTable GetCopyWriteDataTable(DataTable dt)
         {
             var builder = GetBuider();
+            if (builder.DbFastestProperties?.IsConvertDateTimeOffsetToDateTime == true)
+            {
+                dt = UtilMethods.ConvertDateTimeOffsetToDateTime(dt);
+            }
             if (builder.DbFastestProperties?.IsNoCopyDataTable == true) 
             {
                 return dt;

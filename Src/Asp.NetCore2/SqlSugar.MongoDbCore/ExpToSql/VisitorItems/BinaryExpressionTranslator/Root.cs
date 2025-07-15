@@ -14,22 +14,26 @@ namespace SqlSugar.MongoDb
     public partial class BinaryExpressionTranslator
     {
         MongoNestedTranslatorContext _context;
-
+        ExpressionVisitorContext _visitorContext;
         public BinaryExpressionTranslator(MongoNestedTranslatorContext context, ExpressionVisitorContext visitorContext)
         {
             _context = context;
+            _visitorContext = visitorContext;
         }
 
         public BsonDocument Extract(BinaryExpression expr)
         {
-            if (expr.NodeType == ExpressionType.AndAlso || expr.NodeType == ExpressionType.OrElse)
-            {
+            if (IsLogicalExpression(expr))
                 return LogicalBinaryExpression(expr);
-            } 
-            return FieldComparisonOrCalculationExpression(expr);
+            else
+                return FieldComparisonOrCalculationExpression(expr);
         }
-         
-    
+
+        private static bool IsLogicalExpression(BinaryExpression expr)
+        {
+            return expr.NodeType == ExpressionType.AndAlso || expr.NodeType == ExpressionType.OrElse;
+        }
+
         private static bool IsRightValue(bool leftIsMember, bool rightIsMember, string op)
         {
             return  rightIsMember && !leftIsMember;
