@@ -1,7 +1,9 @@
-﻿using System;
+﻿using Dm;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.DirectoryServices.Protocols;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -375,10 +377,38 @@ WHERE table_name = '" + tableName + "'");
         {
             if (this.Context.Ado.IsValidConnection())
             {
+                CreateSchemaIfNotExists(this.Context);
                 return true;
             }
-            Check.ExceptionEasy("dm no support create database ", "达梦不支持建库方法，请写有效连接字符串可以正常运行该方法。");
+            Check.ExceptionEasy("dm no support create database ,only create schema", "达梦只支持创建Schema但不能创建数据库保证这个连接字符串数据库存在并能用。");
             return true;
+        }
+        public void CreateSchemaIfNotExists(ISqlSugarClient db)
+        {
+            if (!db.CurrentConnectionConfig.ConnectionString.Replace(" ", "").Contains("SCHEMA=", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            DbConnectionStringBuilder dbConnection = new DbConnectionStringBuilder();
+            dbConnection.ConnectionString = db.CurrentConnectionConfig.ConnectionString;
+            object schemaName = string.Empty;
+            if (dbConnection.TryGetValue("schema", out schemaName) && !string.IsNullOrEmpty(schemaName?.ToString()))
+            {
+                var newConn = dbConnection.Remove("schema");
+                var newddb = new SqlSugarClient(new ConnectionConfig()
+                {
+                    ConnectionString =
+                    dbConnection.ToString(),
+                    DbType=DbType.Dm,
+                    IsAutoCloseConnection=true
+                });
+                // 检查 Schema 是否存在，不存在则创建
+                var schemaExists = newddb.Ado.GetInt($"SELECT COUNT(*) FROM SYSOBJECTS WHERE TYPE$ = 'SCH' AND Upper(NAME) = '{schemaName?.ToString()?.ToUpper()}'") > 0;
+                if (!schemaExists)
+                {
+                    newddb.Ado.ExecuteCommand($"CREATE SCHEMA {schemaName}");
+                }
+            }
         }
         public override bool CreateDatabase(string databaseName, string databaseDirectory = null)
         {
@@ -454,7 +484,7 @@ WHERE table_name = '" + tableName + "'");
         {
             List<DbColumnInfo> columns = GetOracleDbType(tableName);
             string sql = "select * from " + SqlBuilder.GetTranslationTableName(tableName) + " WHERE 1=2 ";
-            if (!this.GetTableInfoList(false).Any(it => it.Name == SqlBuilder.GetTranslationTableName(tableName).TrimStart('\"').TrimEnd('\"')))
+            if(!this.IsAnyTable(SqlBuilder.GetTranslationTableName(tableName).TrimStart('\"').TrimEnd('\"'),false))
             {
                 sql = "select * from \"" + tableName + "\" WHERE 1=2 ";
             }
@@ -531,8 +561,14 @@ WHERE table_name = '" + tableName + "'");
                                          on  t2.table_name = t3.table_name and t2.index_name = t3.index_name
                                         and t3.status = 'valid' and t3.uniqueness = 'unique') t4   --unique:唯一索引
                               on  t1.table_name = t4.table_name and t1.column_name = t4.column_name 
-                            left join user_col_comments t5 on   t1.table_name = t5.table_name and t1.column_name = t5.column_name 
-                            left join user_tab_comments t6 on  t1.table_name = t6.table_name
+                            left join ( select *
+                                from user_col_comments
+                                where upper(table_name) = upper('{tableName}') 
+                                ) t5 on   t1.table_name = t5.table_name and t1.column_name = t5.column_name 
+                            left join ( select *
+                                 from user_tab_comments
+                                where upper(table_name) = upper('{tableName}')
+                              ) t6 on  t1.table_name = t6.table_name
                             where upper(t1.table_name)=upper('{tableName}')
                             order by  t1.table_name, t1.column_id";
 

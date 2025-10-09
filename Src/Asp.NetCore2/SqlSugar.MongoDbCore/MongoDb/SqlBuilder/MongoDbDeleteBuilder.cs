@@ -9,6 +9,23 @@ namespace SqlSugar.MongoDb
 {
     public class MongoDbDeleteBuilder : DeleteBuilder
     {
+        public override string GetTableNameString
+        {
+            get
+            {
+                var result = Builder.GetTranslationTableName(EntityInfo.EntityName);
+                if (AsName.HasValue())
+                {
+                    result =AsName;
+                }
+                result += UtilConstants.Space;
+                if (this.TableWithString.HasValue())
+                {
+                    result += TableWithString + UtilConstants.Space;
+                }
+                return result;
+            }
+        }
         public override string ToSqlString()
         {
             var sb = new StringBuilder($"deleteMany {this.GetTableNameString} ");
@@ -35,7 +52,15 @@ namespace SqlSugar.MongoDb
                     var bsonArray = new BsonArray();
                     foreach (var idStr in idStrings)
                     {
-                        bsonArray.Add(ObjectId.Parse(idStr)); // fallback 为普通字符串
+                        if (UtilMethods.IsValidObjectId(idStr))
+                        {
+                            bsonArray.Add(ObjectId.Parse(idStr));
+                        }
+                        else 
+                        {
+                            var value = SqlSugar.UtilMethods.ConvertDataByTypeName(key?.UnderType?.Name,idStr);
+                            bsonArray.Add(UtilMethods.MyCreate(value));
+                        }
                     }
 
                     var filter = new BsonDocument

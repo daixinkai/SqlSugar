@@ -135,6 +135,9 @@ namespace SqlSugar
                         case ConditionalType.Range:
                             Range(builder, parameters, item, index, type, parameterName);
                             break;
+                        case ConditionalType.RangeDate:
+                            RangeDate(builder, parameters, item, index, type, parameterName);
+                            break;
                         default:
                             break;
                     }
@@ -220,6 +223,53 @@ namespace SqlSugar
             builder.AppendFormat("( {0}>={1} AND {0}<={2} )", item.FieldName.ToSqlFilter(), parameterNameFirst, parameterNameLast);
             parameters.Add(new SugarParameter(parameterNameFirst, firstValue));
             parameters.Add(new SugarParameter(parameterNameLast, lastValue));
+        }
+        private static void RangeDate(StringBuilder builder, List<SugarParameter> parameters, ConditionalModel item, int index, string type, string parameterName)
+        {
+            var value = item.FieldValue;
+            var valueArray = (value + "").Split(',');
+            if (valueArray.Length != 2)
+            {
+                Check.ExceptionEasy($"The {item.FieldName} value is not a valid format, but is properly separated by a comma (1,2)", $"{item.FieldName} 值不是有效格式，正确是 1,2 这种中间逗号隔开");
+            }
+            var times = GetDateRange(valueArray.FirstOrDefault(), valueArray.LastOrDefault());
+            var parameterNameFirst = parameterName + "_01";
+            var parameterNameLast = parameterName + "_02";
+            builder.AppendFormat("( {0}>={1} AND {0}<{2} )", item.FieldName.ToSqlFilter(), parameterNameFirst, parameterNameLast);
+            parameters.Add(new SugarParameter(parameterNameFirst, times.First()));
+            parameters.Add(new SugarParameter(parameterNameLast, times.Last()));
+        }
+        public static DateTime[] GetDateRange(string date1Str, string date2Str)
+        {
+            var len = date2Str.Trim().Length;
+            if (date1Str.Length == 4)
+            {
+                date1Str = new DateTime(int.Parse(date1Str), 1, 1).ToString(SugarDateTimeFormat.Default);
+            }
+            if (date2Str.Length == 4)
+            {
+                date2Str = new DateTime(int.Parse(date2Str), 1, 1).ToString(SugarDateTimeFormat.Default);
+            }
+            if (!DateTime.TryParse(date1Str, out var date1))
+                Check.ExceptionEasy("date1 format is incorrect.(yyyy-MM-dd | yyyy | yyyy-MM | yyyy-MM-dd HH | yyyy-MM-dd HH:mm)", "date1 格式不正确，支持格式 yyyy-MM-dd | yyyy | yyyy-MM | yyyy-MM-dd HH | yyyy-MM-dd HH:mm");
+
+            if (!DateTime.TryParse(date2Str, out var date2))
+                Check.ExceptionEasy("date2 format is incorrect.", "date2 格式不正确");
+
+            if (len == 4) // yyyy
+                date2 = date2.AddYears(1);
+            else if (len == 7) // yyyy-MM
+                date2 = date2.AddMonths(1);
+            else if (len == 10) // yyyy-MM-dd
+                date2 = date2.AddDays(1);
+            else if (len == 13) // yyyy-MM-dd HH
+                date2 = date2.AddHours(1);
+            else if (len == 16) // yyyy-MM-dd HH:mm
+                date2 = date2.AddMinutes(1);
+            else
+                Check.ExceptionEasy("date format is incorrect.(yyyy-MM-dd | yyyy | yyyy-MM | yyyy-MM-dd HH | yyyy-MM-dd HH:mm)", "date 格式不正确，支持格式 yyyy-MM-dd | yyyy | yyyy-MM | yyyy-MM-dd HH | yyyy-MM-dd HH:mm");
+
+            return new DateTime[] { date1, date2 };
         }
         private static void InLike(StringBuilder builder, List<SugarParameter> parameters, ConditionalModel item, int index, string type, string parameterName)
         {
@@ -408,6 +458,10 @@ namespace SqlSugar
                 if (item.CSharpTypeName.EqualCase("Char"))
                 {
                     p.DbType = System.Data.DbType.StringFixedLength;
+                }
+                if (item.CSharpTypeName.EqualCase("AnsiString"))
+                {
+                    p.DbType = System.Data.DbType.AnsiString;
                 }
                 parameters.Add(p);
             }

@@ -8,6 +8,7 @@ using System.Dynamic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -493,7 +494,16 @@ namespace SqlSugar
                     else if (IsJsonList(readerValues, item))
                     {
                         var json = readerValues.First(y => y.Key.EqualCase(item.Name)).Value.ToString();
-                        result.Add(name, DeserializeObject<List<Dictionary<string, object>>>(json));
+                        if (IsMongoDb())
+                        {
+                            var q=InstanceFactory.GetInsertBuilder(this.Context.CurrentConnectionConfig);
+                            var qv =q.DeserializeObjectFunc(json, item.PropertyType);
+                            result.Add(name, qv);
+                        }
+                        else
+                        {
+                            result.Add(name, DeserializeObject<List<Dictionary<string, object>>>(json));
+                        }
                     }
                     else if (IsBytes(readerValues, item))
                     {
@@ -536,6 +546,10 @@ namespace SqlSugar
                            if (ignoreColumns.Any()) 
                            {
                                 ignorePropertyNames = ignoreColumns.Select(it => it.Key).ToList();
+                           } 
+                           if (ignorePropertyNames?.Contains(name)==true) 
+                           {
+                               continue;
                            }
                         }
                         result.Add(name, DataReaderToDynamicList_Part(readerValues, item, reval, mappingKeys, ignorePropertyNames));
@@ -667,13 +681,26 @@ namespace SqlSugar
             return isArray || isListItem;
         }
 
-        private static bool IsJsonList(Dictionary<string, object> readerValues, PropertyInfo item)
+        private bool IsJsonList(Dictionary<string, object> readerValues, PropertyInfo item)
         {
+            if (IsMongoDb())
+            {
+                return item.PropertyType.FullName.IsCollectionsList() &&
+                            readerValues.Any(y => y.Key.EqualCase(item.Name)) &&
+                            readerValues.First(y => y.Key.EqualCase(item.Name)).Value != null &&
+                            readerValues.First(y => y.Key.EqualCase(item.Name)).Value.GetType().FullName == "MongoDB.Bson.BsonArray" &&
+                            Regex.IsMatch(readerValues.First(y => y.Key.EqualCase(item.Name)).Value.ToString(), @"^\[{.+\}]$");
+            }
             return item.PropertyType.FullName.IsCollectionsList() &&
                                         readerValues.Any(y => y.Key.EqualCase(item.Name)) &&
                                         readerValues.First(y => y.Key.EqualCase(item.Name)).Value != null &&
                                         readerValues.First(y => y.Key.EqualCase(item.Name)).Value.GetType() == UtilConstants.StringType &&
                                         Regex.IsMatch(readerValues.First(y => y.Key.EqualCase(item.Name)).Value.ToString(), @"^\[{.+\}]$");
+        }
+
+        private bool IsMongoDb()
+        {
+            return this.Context?.CurrentConnectionConfig?.DbType == DbType.MongoDb;
         }
 
         private Dictionary<string, object> DataReaderToDynamicList_Part<T>(Dictionary<string, object> readerValues, PropertyInfo item, List<T> reval, Dictionary<string, string> mappingKeys = null,List<string> ignoreColumns=null)
@@ -789,6 +816,10 @@ namespace SqlSugar
                         else if (UtilMethods.GetUnderType(prop.PropertyType) == UtilConstants.IntType && addItem != null)
                         {
                             addItem = addItem.ObjToInt();
+                        }
+                        else if (underType == UtilConstants.LongType && addItem != null)
+                        {
+                            addItem = addItem.ObjToLong();
                         }
                         else if (addItem!=null&&underType?.FullName == "System.DateOnly") 
                         {
@@ -1303,6 +1334,10 @@ namespace SqlSugar
         public string EscapeLikeValue(string value, char wildcard = '%') 
         {
             return UtilMethods.EscapeLikeValue(this.Context, value, wildcard);
+        }
+        public string EscapeLikeValue(string value, char [] wildcards)
+        {
+            return UtilMethods.EscapeLikeValue(this.Context, value, wildcards);
         }
         #endregion
     }

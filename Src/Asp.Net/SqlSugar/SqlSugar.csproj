@@ -173,6 +173,7 @@
     <Compile Include="Entities\DefaultCustom.cs" />
     <Compile Include="Entities\DeleteNavOptions.cs" />
     <Compile Include="Entities\JoinInfoParameter.cs" />
+    <Compile Include="Enum\PostgresIdentityStrategy.cs" />
     <Compile Include="Enum\SampleByUnit.cs" />
     <Compile Include="ExpressionsToSql\Common\ExpressionContextCase.cs" />
     <Compile Include="ExpressionsToSql\Common\ParameterExpressionVisitor.cs" />
@@ -274,6 +275,7 @@
     <Compile Include="Json2Sql\Utils\Json2SqlConfig.cs" />
     <Compile Include="Json2Sql\Utils\Json2SqlHelper.cs" />
     <Compile Include="OnlyNet\AsyncHelper.cs" />
+    <Compile Include="OnlyNet\StringExtensions.cs" />
     <Compile Include="Realization\Dm\SqlBuilder\DmBlukCopy.cs" />
     <Compile Include="Realization\Dm\SqlBuilder\DmFastBuilder.cs" />
     <Compile Include="Realization\Kdbndp\CodeFirst\KdbndpCodeFirst.cs" />

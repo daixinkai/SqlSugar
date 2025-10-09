@@ -1,4 +1,5 @@
 ﻿using Demo;
+using SqlSeverTest;
 using SqlSeverTest.UserTestCases;
 using SqlSeverTest.UserTestCases.UnitTest;
 using SqlSugar;
@@ -33,6 +34,22 @@ namespace OrmTest
         }
         public static void Init()
         {
+            Unitsdfyasfs3lsss.Init();
+            Unitadsfasyss.Init();
+            Unitsadfasysss.Init();
+            Unitadfafassys.Init();
+            UnitArrayNavQuery.Init();
+            Unitdfasdfasfysa.Init();
+            UnitDefaultValueTest.Init();
+            Unitsdfayderqys.Init();
+            Unitsdfaysrs.Init();
+            Unitdslasdgy.Init();
+            Unitdafaaaaa.Init();
+            Unitdfafaa.Init();
+            Unitdasfyasdfa.Init();
+            Unitafdssfasydsfsf.Init();
+            Unitsdfadysdfa.Init();
+            Unitadfasdysdfa.Init();
             Unitdfayssf.Init();
             Unitdsfasdfys.Init();
             Unitsadfasys.Init();

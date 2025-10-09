@@ -1,5 +1,4 @@
 ﻿using Dm;
-using Dm.util;
 using MongoDB.Bson;
 using Newtonsoft.Json.Linq; 
 using System;
@@ -76,7 +75,14 @@ namespace SqlSugar.MongoDb
 
             while (expr is MemberExpression member)
             {
-                parts.Push(member.Member.Name);
+                if (member.Member.Name.EqualCase("Id"))
+                {
+                    parts.Push("_id");
+                }
+                else
+                {
+                    parts.Push(member.Member.Name);
+                }
                 expr = member.Expression!;
             }
 
@@ -175,7 +181,7 @@ namespace SqlSugar.MongoDb
                 else if (mb.LastParameter == shortName.TrimEnd('.'))
                 {
                     var replaceName = shortName.TrimEnd('.') + ".";
-                    resultString = $"${resultString.TrimStart(replaceName.toCharArray())}";
+                    resultString = $"${resultString.TrimStart(replaceName.ToCharArray())}";
                 }
             }
 
@@ -184,7 +190,7 @@ namespace SqlSugar.MongoDb
 
         private static string GetLetKey(string resultString)
         {
-            return $"let_{resultString}";
+            return $"let_{resultString?.Replace(".","_")}";
         }
     }
 

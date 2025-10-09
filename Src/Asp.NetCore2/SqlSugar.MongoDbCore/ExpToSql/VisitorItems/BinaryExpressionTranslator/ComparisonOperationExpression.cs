@@ -12,11 +12,11 @@ namespace SqlSugar.MongoDb
     {
         private BsonDocument GetComparisonOperation(BinaryExpression expr, BsonValue field, BsonValue value, bool leftIsMember, bool rightIsMember, string op)
         {
-            var isLeftValue = IsLeftValue(leftIsMember, rightIsMember, op);
-            var isRightValue = IsRightValue(leftIsMember, rightIsMember, op);
-            var isKeyValue = isLeftValue || isRightValue;
+            var isLeftMember = IsLeftValue(leftIsMember, rightIsMember, op);
+            var isRightMember = IsRightValue(leftIsMember, rightIsMember, op);
+            var isKeyValue = isLeftMember || isRightMember;
             if (isKeyValue)
-                return ComparisonKeyValue(expr, field, value, op, isLeftValue);
+                return ComparisonKeyValue(expr, field, value, op, isLeftMember);
             else
                 return ComparisonNotKeyValue(field, value, op);
         }
@@ -37,14 +37,24 @@ namespace SqlSugar.MongoDb
                    };
         }
 
-        private BsonDocument ComparisonKeyValue(BinaryExpression expr, BsonValue field, BsonValue value, string op, bool isLeftValue)
+        private BsonDocument ComparisonKeyValue(BinaryExpression expr, BsonValue field, BsonValue value, string op, bool isLeftMember)
         {
-            string leftValue = isLeftValue ? field.ToString() : value.ToString();
-            BsonValue rightValue = isLeftValue ?   value: field;
-            var expression = isLeftValue ? expr.Left as MemberExpression : expr.Right as MemberExpression;
+            string leftValue = isLeftMember ? field.ToString() : value.ToString();
+            BsonValue rightValue = isLeftMember ?   value: field;
+            var expression = isLeftMember ? MongoDbExpTools.RemoveConvert(expr.Left) as MemberExpression : MongoDbExpTools.RemoveConvert(expr.Right) as MemberExpression;
             EntityColumnInfo CurrentColumnInfo = null;
+            Type iSugarDataConverterType=UtilConstants.StringType;
             leftValue = GetLeftValue(leftValue, expression, ref CurrentColumnInfo);
+            if (CurrentColumnInfo?.SqlParameterDbType is Type t && typeof(ISugarDataConverter).IsAssignableFrom(t)) 
+            {
+                iSugarDataConverterType = t;
+            }
             rightValue = GetRightValue(CurrentColumnInfo, rightValue);
+            if (iSugarDataConverterType != UtilConstants.StringType) 
+            { 
+                var p = UtilMethods.GetParameterConverter(0, _context.context, rightValue,expression,CurrentColumnInfo);
+                rightValue = UtilMethods.MyCreate(p.Value);
+            }
             if (IsEq(op)) 
                 return GetEqResult(leftValue, rightValue); 
             else 
@@ -100,7 +110,18 @@ namespace SqlSugar.MongoDb
         {
             if (entityColumnInfo?.IsPrimarykey==true||entityColumnInfo?.DataType==nameof(ObjectId)) 
             {
-                rightValue=ObjectId.Parse(rightValue?.ToString());
+                var str = rightValue?.ToString();
+                if (UtilMethods.IsValidObjectId(str))
+                {
+                    rightValue = ObjectId.Parse(str);
+                } 
+            }
+            else  
+            {
+                if (rightValue!=null&&rightValue.IsString&&UtilMethods.IsValidObjectId(rightValue.AsString))
+                {
+                    rightValue = ObjectId.Parse(rightValue.AsString);
+                }
             }
             return rightValue;
         }

@@ -363,6 +363,8 @@ namespace SqlSugar
             {
                 sql = " ";
             }
+            UtilMethods.UpdateQueryBuilderByClone(this.QueryBuilder, clone);
+            this.QueryBuilder.SelectNewIgnoreColumns = clone.QueryBuilder.SelectNewIgnoreColumns;
             this.QueryBuilder.SubToListParameters = clone.QueryBuilder.SubToListParameters;
             this.QueryBuilder.Parameters = clone.QueryBuilder.Parameters;
             this.QueryBuilder.LambdaExpressions.ParameterIndex = clone.QueryBuilder.LambdaExpressions.ParameterIndex;
@@ -1196,6 +1198,8 @@ namespace SqlSugar
                 sql = " ";
             }
             this.QueryBuilder.Parameters = clone.QueryBuilder.Parameters;
+            UtilMethods.UpdateQueryBuilderByClone(this.QueryBuilder,clone);
+            this.QueryBuilder.SelectNewIgnoreColumns = clone.QueryBuilder.SelectNewIgnoreColumns;
             this.QueryBuilder.SubToListParameters = clone.QueryBuilder.SubToListParameters;
             this.QueryBuilder.LambdaExpressions.ParameterIndex = clone.QueryBuilder.LambdaExpressions.ParameterIndex;
             var parameters = (expression as LambdaExpression).Parameters;
@@ -1209,6 +1213,8 @@ namespace SqlSugar
             }
             return this.Select<TResult>(sql);
         }
+
+
         public virtual ISugarQueryable<TResult> SelectIF<TResult>(bool condition, Expression<Func<T, T2,T3, TResult>> trueSelectExpression, Expression<Func<T, T2,T3, TResult>> falseSelectExpression)
         {
             if (condition)
@@ -1926,7 +1932,9 @@ namespace SqlSugar
             {
                 sql = " ";
             }
+            UtilMethods.UpdateQueryBuilderByClone(this.QueryBuilder, clone);
             this.QueryBuilder.Parameters = clone.QueryBuilder.Parameters;
+            this.QueryBuilder.SelectNewIgnoreColumns = clone.QueryBuilder.SelectNewIgnoreColumns;
             this.QueryBuilder.SubToListParameters = clone.QueryBuilder.SubToListParameters;
             this.QueryBuilder.LambdaExpressions.ParameterIndex=clone.QueryBuilder.LambdaExpressions.ParameterIndex; 
             var parameters = (expression as LambdaExpression).Parameters;
@@ -2761,7 +2769,9 @@ namespace SqlSugar
             {
                 sql = " ";
             }
+            UtilMethods.UpdateQueryBuilderByClone(this.QueryBuilder, clone);
             this.QueryBuilder.Parameters = clone.QueryBuilder.Parameters;
+            this.QueryBuilder.SelectNewIgnoreColumns = clone.QueryBuilder.SelectNewIgnoreColumns;
             this.QueryBuilder.SubToListParameters = clone.QueryBuilder.SubToListParameters;
             this.QueryBuilder.LambdaExpressions.ParameterIndex = clone.QueryBuilder.LambdaExpressions.ParameterIndex;
             var parameters = (expression as LambdaExpression).Parameters;

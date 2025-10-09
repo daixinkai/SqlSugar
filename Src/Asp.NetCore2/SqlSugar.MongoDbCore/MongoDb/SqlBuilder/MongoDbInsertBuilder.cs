@@ -28,8 +28,12 @@ namespace SqlSugar.MongoDb
 
                     foreach (var e in enumerable)
                     {  
-                        var realType = e.GetType();
-                        if (realType.IsClass())
+                        var realType = e?.GetType();
+                        if (realType == null)
+                        {
+                            list.Add(BsonValue.Create(null));
+                        }
+                        else if (realType.IsClass())
                         {
                             var bson = e.ToBson(realType); // 序列化为 byte[]
                             var doc = BsonSerializer.Deserialize<BsonDocument>(bson); // 反序列化为 BsonDocument
@@ -49,6 +53,7 @@ namespace SqlSugar.MongoDb
                     }
 
                     var array = new BsonArray(list);
+                    ConvertBsonDateTimeToLocal(array);
                     return array.ToJson(UtilMethods.GetJsonWriterSettings());
                 }
                 else
@@ -56,6 +61,7 @@ namespace SqlSugar.MongoDb
                     var realType = it.GetType();
                     var bson = it.ToBson(realType); // → byte[]
                     var doc = BsonSerializer.Deserialize<BsonDocument>(bson); // → BsonDocument
+                    ConvertBsonDateTimeToLocal(doc);
                     var json = doc.ToJson(UtilMethods.GetJsonWriterSettings());
                     return json;
                 }
@@ -116,7 +122,7 @@ namespace SqlSugar.MongoDb
                     }
                     return resultList;
                 }
-                else if (json is BsonArray array) 
+                else if (json is BsonArray array && type.GetGenericArguments().Any())
                 {
                     var bsonArray = array;
 
@@ -135,9 +141,65 @@ namespace SqlSugar.MongoDb
                             var obj = BsonSerializer.Deserialize(doc, elementType);
                             resultList.Add(obj);
                         }
-                        else 
+                        else
                         {
-                            var obj = MongoDbDataReaderHelper.ConvertBsonValue(item); 
+                            var obj = MongoDbDataReaderHelper.ConvertBsonValue(item);
+                            resultList.Add(obj);
+                        }
+                    }
+                    return resultList;
+                }
+                else if (json is BsonArray array2 && type.IsArray)
+                {
+                    var bsonArray = array2;
+
+                    // 3. 获取元素类型，例如 List<MyClass> => MyClass
+                    Type elementType = type.GetElementType();
+
+                    // 4. 构造泛型列表对象
+                    var resultList = Array.CreateInstance(elementType, array2.Count());
+
+                    // 5. 反序列化每一项
+                    int index = 0;
+                    foreach (var item in bsonArray)
+                    {
+                        if (item is BsonDocument doc)
+                        {
+                            var obj = BsonSerializer.Deserialize(doc, elementType);
+                            resultList.SetValue(obj, index);
+                        }
+                        else
+                        {
+                            var obj = MongoDbDataReaderHelper.ConvertBsonValue(item);
+                            resultList.SetValue(obj, index);
+                        }
+                        index++;
+                    }
+                    return resultList;
+                }
+                else if (json is string str && type.GetGenericArguments().Any())
+                {
+
+                    var jsonArray = MongoDB.Bson.Serialization.BsonSerializer.Deserialize<BsonArray>(str);
+
+                    // 3. 获取元素类型，例如 List<MyClass> => MyClass
+                    Type elementType = type.GetGenericArguments()[0];
+
+                    // 4. 构造泛型列表对象
+                    var resultList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType));
+
+                    // 5. 反序列化每一项
+                    foreach (var item in jsonArray)
+                    {
+                        if (item is BsonDocument)
+                        {
+                            var doc = item.AsBsonDocument;
+                            var obj = BsonSerializer.Deserialize(doc, elementType);
+                            resultList.Add(obj);
+                        }
+                        else
+                        {
+                            var obj = MongoDbDataReaderHelper.ConvertBsonValue(item);
                             resultList.Add(obj);
                         }
                     }
@@ -148,7 +210,49 @@ namespace SqlSugar.MongoDb
                     return json;
                 }
             };
-        } 
+        }
+        private void ConvertBsonDateTimeToLocal(BsonValue bsonValue)
+        {
+            if (bsonValue == null || bsonValue.IsBsonNull)
+                return;
+
+            if (bsonValue.IsBsonDocument)
+            {
+                var doc = bsonValue.AsBsonDocument;
+                foreach (var element in doc.Elements.ToList())
+                {
+                    var val = element.Value;
+                    if (val.BsonType == BsonType.DateTime)
+                    {
+                        var utcDate = val.ToUniversalTime();
+                        var localDate = utcDate.ToLocalTime();
+                        doc[element.Name] =UtilMethods.MyCreate(localDate);
+                    }
+                    else
+                    {
+                        ConvertBsonDateTimeToLocal(val);
+                    }
+                }
+            }
+            else if (bsonValue.IsBsonArray)
+            {
+                var array = bsonValue.AsBsonArray;
+                for (int i = 0; i < array.Count; i++)
+                {
+                    var val = array[i];
+                    if (val.BsonType == BsonType.DateTime)
+                    {
+                        var utcDate = val.ToUniversalTime();
+                        var localDate = utcDate.ToLocalTime();
+                        array[i] = new BsonDateTime(localDate);
+                    }
+                    else
+                    {
+                        ConvertBsonDateTimeToLocal(val);
+                    }
+                }
+            }
+        }
         public override string SqlTemplate
         {
             get
@@ -201,11 +305,20 @@ namespace SqlSugar.MongoDb
                     // 自动推断类型，如 string、int、bool、DateTime、ObjectId 等
                     if (col.IsJson == true)
                     {
-                        doc[col.DbColumnName] =UtilMethods.ParseJsonObject(col.Value);
+                        doc[col.DbColumnName] = UtilMethods.ParseJsonObject(col.Value);
                     }
-                    else if (col.Value!=null&&col.DataType == nameof(ObjectId)) 
+                    else if (col.Value != null && col.DataType == nameof(ObjectId))
                     {
                         doc[col.DbColumnName] = UtilMethods.MyCreate(ObjectId.Parse(col.Value?.ToString()));
+                    }
+                    else if (col.InsertServerTime)
+                    {
+                        doc[col.DbColumnName] = UtilMethods.MyCreate(DateTime.Now);
+                    }
+                    else if (col.SqlParameterDbType is Type t&& typeof(ISugarDataConverter).IsAssignableFrom(t)) 
+                    {
+                        var p =UtilMethods.GetParameterConverter(0,this.Context,col.Value,this.EntityInfo,this.EntityInfo.Columns.FirstOrDefault(s=>s.PropertyName.EqualCase(col.PropertyName)));
+                        doc[col.DbColumnName] = UtilMethods.MyCreate(p.Value);
                     }
                     else
                     {

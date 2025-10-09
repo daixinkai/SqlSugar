@@ -55,8 +55,10 @@ namespace MongoDbTest
             {
                 Day = it.CreateDateTime.AddDays(1),
                 Year = it.CreateDateTime.AddYears(1),
-                AddMonth = it.CreateDateTime.AddMonths(1)
+                AddMonth = it.CreateDateTime.AddMonths(1),
+                datediff=SqlFunc.DateDiff(DateType.Day,it.CreateDateTime,DateTime.Now.AddDays(2))
             }).ToList();
+            if(list4.First().datediff!=2) Cases.ThrowUnitError();
             if (list4.First().Day.Date != dt.Date.AddDays(1)) Cases.ThrowUnitError();
             if (list4.First().Year.Date != dt.Date.AddYears(1)) Cases.ThrowUnitError();
             if (list4.First().AddMonth.Date != dt.Date.AddMonths(1)) Cases.ThrowUnitError();
@@ -241,6 +243,10 @@ namespace MongoDbTest
             }).ToList();
             if (list29.Any(it => it.age >15 && it.age2 != 1)) Cases.ThrowUnitError();
             if (list29.Any(it => it.age < 15 && it.age2 != 2)) Cases.ThrowUnitError();
+            db.Queryable<Student>().Where(it => it.Age == 1).OrderBy(IT=>IT.Id).ToList();
+         
+            var list2111= db.Queryable<object>().AS("UnitStudent1231sds3z1")
+                .OrderBy("{ \"Name\" : 1 }").Where("{  Age: 1 }").ToDataTable();
         }
         [SqlSugar.SugarTable("UnitStudent1231sds3z1")]
         public class Student : MongoDbBase

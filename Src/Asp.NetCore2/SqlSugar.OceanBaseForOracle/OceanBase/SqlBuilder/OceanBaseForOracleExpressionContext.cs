@@ -16,6 +16,7 @@ namespace SqlSugar.OceanBaseForOracle
         public OceanBaseForOracleExpressionContext()
         {
             base.DbMehtods = new OceanBaseForOracleMethod();
+            base.Case = new ExpressionContextCase();
         }
         public override string SqlParameterKeyWord
         {
@@ -71,6 +72,16 @@ namespace SqlSugar.OceanBaseForOracle
                     return this.SugarContext?.Context?.Context?.CurrentConnectionConfig?.MoreSettings.IsAutoToUpper == true;
                 }
             }
+        }
+
+        public override string GetLimit()
+        {
+            int num = 1;
+            if (this.Case?.Num > 1)
+            {
+                num = this.Case.Num;
+            }
+            return (this.Case?.HasWhere == true ? "AND" : "WHERE") + " ROWNUM=" + num;
         }
     }
     public partial class OceanBaseForOracleMethod : DefaultDbMethod, IDbMethods

@@ -1,5 +1,4 @@
-﻿using Dm.util;
-using MongoDB.Bson;
+﻿using MongoDB.Bson;
 using MongoDB.Driver;
 using SqlSugar.MongoDb;
 using System;
@@ -33,9 +32,6 @@ namespace SqlSugar.MongoDb
                 return "ORDER BY NOW() ";
             }
         }
-        #endregion
-
-        #region ToSqlString Items 
         private void ProcessSelectConditions(List<string> operations)
         {
             if (this.SelectValue is Expression expression)
@@ -53,14 +49,51 @@ namespace SqlSugar.MongoDb
                 }
                 else if (dos.ElementCount > 0 && dos.GetElement(0).Name.StartsWith("$"))
                 {
-                    // 如果第一个key带有$，说明是个函数，外面套一层fieldName
-                    var funcDoc = new BsonDocument(dos); // 复制一份
+                    var funcDoc = new BsonDocument(dos);
                     dos.Clear();
                     dos.Add(UtilConstants.FieldName, funcDoc);
                     dos.Add(new BsonElement("_id", "0"));
                 }
                 var json = dos.ToJson(UtilMethods.GetJsonWriterSettings());
                 operations.Add($"{{\"$project\": {json} }}");
+            }
+            else if (this.SelectValue is string s)
+            {
+                // 支持 MAX/MIN/AVG
+                var aggTypes = new[] { "MAX", "MIN", "AVG" };
+                foreach (var agg in aggTypes)
+                {
+                    if (s.StartsWith($"{agg}({{ \"{UtilConstants.FieldName}\" : "))
+                    {
+                        // 解析 AGG({ "SqlSugarFieldName" : "StudentCount" })
+                        var match = Regex.Match(s, $@"{agg}\(\{{\s*""(?<fieldName>[^""]+)""\s*:\s*""(?<value>[^""]+)""\s*\}}\)");
+                        if (match.Success)
+                        {
+                            var fieldName = match.Groups["fieldName"].Value;
+                            var value = match.Groups["value"].Value;
+                            string mongoAgg = agg switch
+                            {
+                                "MAX" => "$max",
+                                "MIN" => "$min",
+                                "AVG" => "$avg",
+                                _ => "$max"
+                            };
+                            var groupDoc = new BsonDocument("$group", new BsonDocument
+                            {
+                                { "_id", BsonNull.Value },
+                                { $"{agg}_{value}", new BsonDocument(mongoAgg, $"${value}") }
+                            });
+                            operations.Add(groupDoc.ToJson(UtilMethods.GetJsonWriterSettings()));
+                            var projectDoc = new BsonDocument("$project", new BsonDocument
+                            {
+                                { $"{agg}_{value}", 1 },
+                                { "_id", 0 }
+                            });
+                            operations.Add(projectDoc.ToJson(UtilMethods.GetJsonWriterSettings()));
+                        }
+                        break;
+                    }
+                }
             }
         }
         private void ProcessGroupByConditions(List<string> operations)
@@ -129,6 +162,11 @@ namespace SqlSugar.MongoDb
                 order = order.Substring("ORDER BY ".Length).Trim();
 
                 var sortDoc = new BsonDocument();
+                if (order.StartsWith("{") && order.EndsWith("}")&&!order.Contains(UtilConstants.FieldName)) 
+                {
+                    operations.Add($"{{ \"$sort\": {order} }}");
+                    return;
+                }
                 foreach (var str in order.Split(","))
                 {
                     int lastSpace = str.LastIndexOf(' ');
@@ -204,8 +242,8 @@ namespace SqlSugar.MongoDb
                 var joinWhereDoc = MongoDB.Bson.Serialization.BsonSerializer.Deserialize<BsonDocument>(item.JoinWhere);
                 var isEasyJoin = !(this.JoinQueryInfoLets?.Any(s => s.Key.EqualCase(item.ShortName)) == true);
                 var isExp = !isEasyJoin;
-                var localField = isExp ? string.Empty : joinWhereDoc.GetElement(0).Value["$eq"][0]?.toString()?.TrimStart('$'); 
-                var foreignField = isExp ?string.Empty: joinWhereDoc.GetElement(0).Value["$eq"][1]?.toString()?.TrimStart($"${item.ShortName}.".toCharArray());
+                var localField = isExp ? string.Empty : joinWhereDoc.GetElement(0).Value["$eq"][0]?.ToString()?.TrimStart('$'); 
+                var foreignField = isExp ?string.Empty: joinWhereDoc.GetElement(0).Value["$eq"][1]?.ToString()?.TrimStart($"${item.ShortName}.".ToCharArray());
 
                 string from = item.TableName ?? item.ShortName ?? "Unknown";
                 string asName = item.ShortName;
@@ -270,7 +308,7 @@ namespace SqlSugar.MongoDb
 
                 // $unwind
                 BsonValue unwindDoc = null;
-                if (item.JoinType == JoinType.Left&&isEasyJoin)
+                if (item.JoinType == JoinType.Left)
                 {
                     unwindDoc = new BsonDocument("$unwind", new BsonDocument
                     {

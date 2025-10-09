@@ -686,6 +686,16 @@ namespace SqlSugar
                         }  
                     }
                 }
+                else if (navColumn != null && navColumn.Navigat.NavigatType == NavigateType.ManyToMany)
+                {
+                    var name1 = navColumn.Navigat.AClassId; 
+                    var name1Column = entityColumns.FirstOrDefault(it => it.PropertyName == name1); 
+                    if (name1Column != null)
+                    {
+                        if (!navInfo.AppendProperties.ContainsKey(name1Column.PropertyName))
+                            navInfo.AppendProperties.Add(name1Column.PropertyName, name1Column.DbColumnName);
+                    }  
+                }
             }
         }
 
@@ -1770,6 +1780,27 @@ namespace SqlSugar
                 var groupBySql = UtilMethods.GetSqlString(DbType.SqlServer, result, newParas.ToArray());
                 this.QueryBuilder.GroupBySql = groupBySql;
                 this.QueryBuilder.GroupBySqlOld = result;
+
+                if (expression is NewExpression s && s.Arguments.Count > 1)
+                {
+                    foreach (var item in s.Arguments)
+                    { 
+                            var q = this.Context.Queryable<object>().QueryBuilder;
+                            var itemObj= q.GetExpressionValue(item, isSingle ? ResolveExpressType.FieldSingle : ResolveExpressType.WhereMultiple).GetResultString();
+                            if (q.Parameters.Any())
+                            {
+                                var itemGroupBySql = UtilMethods.GetSqlString(DbType.SqlServer, itemObj, q.Parameters.ToArray());
+                                this.QueryBuilder.GroupBySql = itemGroupBySql;
+                                this.QueryBuilder.GroupBySqlOld = itemGroupBySql;
+                                this.GroupBy(itemGroupBySql);
+                            }
+                            else
+                            {
+                                this.GroupBy(itemObj);
+                            } 
+                    }
+                    return this;
+                }
                 GroupBy(result);
             }
             else
@@ -2389,8 +2420,17 @@ namespace SqlSugar
                  new QueryableAppendColumn(){ Name="sugarIndex",AsName="sugarIndex" }
                 };
             this.QueryBuilder.AppendValues = null;
+            var isNavQuery = this.QueryBuilder.Includes != null;
+            if (isNavQuery)
+            {
+                this.Context.Ado.DbBind.QueryBuilder.AppendColumns = this.QueryBuilder.AppendColumns;
+            }
             var subList = ExpressionBuilderHelper.CallFunc(callType, methodParamters, this.Clone(), "SubQueryList");
             var appendValue = this.QueryBuilder.AppendValues;
+            if (isNavQuery)
+            {
+                appendValue = this.Context.Ado.DbBind.QueryBuilder.AppendValues;
+            }
             var list = (subList as IEnumerable).Cast<object>().ToList();
             if (isFirst && !typeof(TResult).IsAnonymousType())
             {

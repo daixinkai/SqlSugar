@@ -1,10 +1,13 @@
 ﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Driver;
 using SqlSugar;
 using SqlSugar.MongoDb;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -15,52 +18,102 @@ namespace MongoDbTest
         internal static void Init()
         {
             var db = DbHelper.GetNewDb();
-            db.CodeFirst.InitTables<Student>();
-            db.DbMaintenance.TruncateTable<Student>();
-            db.Insertable(new Student() { Age = 1, Name = "tom", SchoolId = "a", Book = new List<Book>() { new Book() { CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
-            var data1=db.Queryable<Student>().ToList();
-            if (data1.First().Book.Count != 1)  Cases.ThrowUnitError();
-            if (data1.First().Book.First().Price != 21) Cases.ThrowUnitError();
-            data1.First().Book.First().Price = 100;
-            db.Updateable(data1).ExecuteCommand();
-            var data2 = db.Queryable<Student>().ToList(); 
-            if (data2.First().Book.First().Price != 100) Cases.ThrowUnitError();
-            var exp=Expressionable.Create<Student>().ToExpression();
-            var data3 = db.Queryable<Student>().Where(exp).ToList();
-            db.Insertable(new Student() { Age = 1, Name = "haha", SchoolId = "1", Book = new List<Book>() { new Book() { CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
-            var data4=db.Queryable<Student>().Where(it => it.Book.Any(s => s.Price == 21)).ToList(); 
-            if(data4.Count!=1||data4.First().Book.First().Price!=21) Cases.ThrowUnitError();
-            var data5 = db.Queryable<Student>().Where(it => it.Book.Any(s => s.Price == 21||s.Price==100)).ToList();
-            db.DbMaintenance.TruncateTable<Student>();
-            var id = ObjectId.GenerateNewId()+"";
-            db.Insertable(new Student() { Age = 1, Name = "a", SchoolId = "1", Book = new List<Book>() { new Book() { SId=id, CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
-            db.Insertable(new Student() { Age = 1, Name = "b", SchoolId = "1", Book = new List<Book>() { new Book() { SId = id, CreateTime = DateTime.Now, Price = 100 } } }).ExecuteCommand();
-            db.Insertable(new Student() { Age = 1, Name = "c", SchoolId = "1", Book = new List<Book>() { new Book() { SId = ObjectId.GenerateNewId() + "", CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
-            var data6= db.Queryable<Student>().Where(it => it.Book.Any(s => s.Price == 21 &&s.SId==id)).ToList();
-            if(data6.Count!=1||data6.First().Name!="a") Cases.ThrowUnitError();
 
+            ListClass(db);
 
+            ListValueType(db);
+        }
+
+        private static void ListValueType(SqlSugarClient db)
+        {
             db.CodeFirst.InitTables<IdsModel>();
             db.DbMaintenance.TruncateTable<IdsModel>();
             var ids = new List<string> { ObjectId.GenerateNewId() + "" };
-            var sid =ObjectId.GenerateNewId() + "";
-            db.Insertable(new IdsModel() {name="a", Ids =ids,Students=new List<Student>() {
+            var sid = ObjectId.GenerateNewId() + "";
+            db.Insertable(new IdsModel()
+            {
+                name = "a",
+                Ids = ids,
+                Students = new List<Student>() {
               new Student(){ Id =sid}
-            } }).ExecuteCommand();
+            }
+            }).ExecuteCommand();
             db.Insertable(new IdsModel()
             {
                 name = "b",
-                Ids = new List<string> { ObjectId.GenerateNewId()+"" },
+                Ids = new List<string> { ObjectId.GenerateNewId() + "" },
                 Students = new List<Student>() {
               new Student(){ Id =ObjectId.GenerateNewId()+""}
             }
             }).ExecuteCommand();
             var x = ids.Last();
-            var list2=db.Queryable<IdsModel>().Where(it => it.Ids.Contains(x)).ToList();
+            var list2 = db.Queryable<IdsModel>().Where(it => it.Ids.Contains(x)).ToList();
             if (list2.Count != 1) Cases.ThrowUnitError();
             if (!list2.First().Ids.Contains(x)) Cases.ThrowUnitError();
             var list3 = db.Queryable<IdsModel>().Where(it => !it.Ids.Contains(x)).ToList();
-            if(list3.Any(s=>s.Ids.Contains(x))) Cases.ThrowUnitError();
+            if (list3.Any(s => s.Ids.Contains(x))) Cases.ThrowUnitError();
+            db.Insertable(new IdsModel()
+            {
+                name = "b",
+                Ids = new List<string> { ObjectId.GenerateNewId() + "", ObjectId.GenerateNewId() + "" },
+                Students = new List<Student>() {
+              new Student(){ Id =ObjectId.GenerateNewId()+""}
+            }
+            }).ExecuteCommand();
+            var list4 = db.Queryable<IdsModel>().Select(it => it.Ids.Count()).ToList();
+            if (list4.Last() != 2) Cases.ThrowUnitError();
+            var list6 = db.Queryable<IdsModel>().Select(it => new IdsModel { Students = it.Students }).ToList();
+            var list5 = db.Queryable<IdsModel>().Select(it => new { it.Students }).ToList();
+            if (list5.Last().Students.First().Id != list6.Last().Students.First().Id) Cases.ThrowUnitError();
+
+            var p = new List<Student>() { new Student() { Age = 100111 } };
+            db.Updateable<IdsModel>()
+                .SetColumns(it => it.Students == p)
+                .Where(s => s.name == "b").ExecuteCommand();
+            var data = db.Queryable<IdsModel>().Where(s => s.name == "b").First();
+            if (data.Students.First().Age != 100111) Cases.ThrowUnitError();
+        }
+
+        private static void ListClass(SqlSugarClient db)
+        {
+            db.CodeFirst.InitTables<Student>();
+            db.DbMaintenance.TruncateTable<Student>();
+            db.Insertable(new Student() { Age = 1, Name = "tom", SchoolId = "a", Books = new List<Book>() { new Book() { CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
+            var data1 = db.Queryable<Student>().ToList();
+            if (data1.First().Books.Count != 1) Cases.ThrowUnitError();
+            if (data1.First().Books.First().Price != 21) Cases.ThrowUnitError();
+            data1.First().Books.First().Price = 100;
+            db.Updateable(data1).ExecuteCommand();
+            var data2 = db.Queryable<Student>().ToList();
+            if (data2.First().Books.First().Price != 100) Cases.ThrowUnitError();
+            var exp = Expressionable.Create<Student>().ToExpression();
+            var data3 = db.Queryable<Student>().Where(exp).ToList();
+            db.Insertable(new Student() { Age = 1, Name = "haha", SchoolId = "1", Books = new List<Book>() { new Book() { CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
+            var data4 = db.Queryable<Student>().Where(it => it.Books.Any(s => s.Price == 21)).ToList();
+            if (data4.Count != 1 || data4.First().Books.First().Price != 21) Cases.ThrowUnitError();
+            var data5 = db.Queryable<Student>().Where(it => it.Books.Any(s => s.Price == 21 || s.Price == 100)).ToList();
+            db.DbMaintenance.TruncateTable<Student>();
+            var id = ObjectId.GenerateNewId() + "";
+            db.Insertable(new Student() { Age = 1, Name = "a", SchoolId = "1", Books = new List<Book>() { new Book() { SId = id, CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
+            db.Insertable(new Student() { Age = 1, Name = "b", SchoolId = "1", Books = new List<Book>() { new Book() { SId = id, CreateTime = DateTime.Now, Price = 100 } } }).ExecuteCommand();
+            db.Insertable(new Student() { Age = 1, Name = "c", SchoolId = "1", Books = new List<Book>() { new Book() { SId = ObjectId.GenerateNewId() + "", CreateTime = DateTime.Now, Price = 21 } } }).ExecuteCommand();
+            var data6 = db.Queryable<Student>().Where(it => it.Books.Any(s => s.Price == 21 && s.SId == id)).ToList();
+            if (data6.Count != 1 || data6.First().Name != "a") Cases.ThrowUnitError();
+            db.Insertable(new Student() { Age = 99, Name = "price=age", SchoolId = "1", Books = new List<Book>() { new Book() { SId = ObjectId.GenerateNewId() + "", CreateTime = DateTime.Now, Price = 99 } } }).ExecuteCommand();
+            var data7 = db.Queryable<Student>().Where(it => it.Books.Any(s => s.Price == it.Age)).ToList();
+            var data8 = db.Queryable<Student>().Where(it => it.Books.Any(s => it.Age == s.Price)).ToList();
+            if (data7.Count != 1 || data8.Count != 1) Cases.ThrowUnitError();
+            if (data7.FirstOrDefault().Name != "price=age" || data8.FirstOrDefault().Name != "price=age") Cases.ThrowUnitError();
+            var data9 = db.Queryable<Student>().Where(it => it.Books.Any()).ToList();
+            db.Insertable(new Student() { Age = 1000, Name = "call", SchoolId = "1", Books = new List<Book>() { new Book() { NumStr = "1", BookChildList=new List<Book>() { new Book() { }  } } } }).ExecuteCommand();
+            var data12 = db.Queryable<Student>().Where(it => it.Books.Any(s => s.NumStr == "1")).ToList();
+            var data13 = db.Queryable<Student>().Where(it => it.Books.Any(s => SqlFunc.ToInt32(s.NumStr) ==1)).ToList();
+            if (data13.First().Name != "call") Cases.ThrowUnitError();
+            db.Insertable(new Student() { Age = 1, Name = "adddays1", SchoolId = "1", Books = new List<Book>() { new Book() { TimeStr=DateTime.Now.AddDays(1).ToString("yyyy-MM-dd HH:mm:ss") } } }).ExecuteCommand();
+            var data14 = db.Queryable<Student>().Where(it => it.Books.Any(s => Convert.ToDateTime(s.TimeStr) > DateTime.Now)).ToList();
+            if(data14.First().Name!= "adddays1") Cases.ThrowUnitError();
+            var data15 = db.Queryable<Student>().Where(it => it.Books.Any(s =>s.BookChildList.Any())).ToList();
+            if (data15.Any(it=>it.Books.Any(s=>s.BookChildList.Any())==false)) Cases.ThrowUnitError();
         }
 
         [SqlSugar.SugarTable("UnitStudentdfsds3zzz1")]
@@ -75,7 +128,7 @@ namespace MongoDbTest
             public DateTime CreateDateTime { get; set; }
 
             [SqlSugar.SugarColumn(IsJson = true)]
-            public List<Book> Book { get; set; }
+            public List<Book> Books { get; set; }
         }
         public class IdsModel 
         {
@@ -87,12 +140,16 @@ namespace MongoDbTest
         }
         public class Book
         {
+            public string TimeStr { get; set; }
+            public string NumStr { get; set; }
             public decimal Price { get; set; }
             public DateTime CreateTime { get; set; }
 
             [BsonRepresentation(BsonType.ObjectId)]
             [SqlSugar.SugarColumn(ColumnDataType = nameof(ObjectId))]
             public string SId { get; set; }
+
+            public List<Book> BookChildList { get; set; }
         }
     }
 

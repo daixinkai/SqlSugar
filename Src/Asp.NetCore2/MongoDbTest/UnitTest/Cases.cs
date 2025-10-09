@@ -16,13 +16,34 @@ namespace MongoDbTest
             QuerySelect.Init();
             QuerySelect2.Init();
             QueryJson.Init();
+            QueryJson2.Init();
+            QueryJson3.Init();
+            QueryJson4.Init();
+            QueryJson5.Init();
+            QueryJson6.Init();
+            QueryJson7.Init();
+            QueryJson8.Init();
+            UnitJsonAndNew.Init();
             QueryLeftJoin.Init();
             QueryLeftJoin2.Init();
+            QueryLeftJoin3.Init();
             QueryJsonArray.Init();
+            QueryJsonArray2.Init();
+            QueryJsonArray3.Init();
             Insert.Init();
+            Insert2.Init();
             Update.Init();
             Delete.Init();
             InsertOrUpdate.Init();
+            Unitdafasdys.Init();
+            Enum.Init();
+            Enum2.Init();
+
+            //主键不是ObjectId类型用例 
+            //The primary key is not an ObjectId type use case
+            LongPrimaryKey.Init();
+            GuidPrimaryKey.Init();
+            StringPrimaryKey.Init();
         } 
         public static void ThrowUnitError()
         {

@@ -616,6 +616,18 @@ WHERE tgrelid = '" + tableName + "'::regclass");
                     }
                     string length = dataType.Substring(dataType.Length - 1);
                     string identityDataType = "serial" + length;
+                    if (IsSqlServerModel()&&dataType=="int") 
+                    {
+                        identityDataType = $" serial4 ";
+                    }
+                    if (IsSqlServerModel() && dataType == "long")
+                    {
+                        identityDataType = $" serial8 ";
+                    }
+                    if (IsSqlServerModel() && dataType == "bigint")
+                    {
+                        identityDataType = $" serial8 ";
+                    }
                     addItem = addItem.Replace(dataType, identityDataType);
                 }
                 columnArray.Add(addItem);

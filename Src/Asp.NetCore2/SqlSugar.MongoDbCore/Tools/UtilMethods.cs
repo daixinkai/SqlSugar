@@ -1,5 +1,4 @@
-﻿using Dm.util;
-using Microsoft.IdentityModel.Tokens;
+﻿using Microsoft.IdentityModel.Tokens;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
@@ -22,6 +21,37 @@ namespace SqlSugar.MongoDb
 {
     public class UtilMethods
     {
+        internal static bool IsJsonMember(Expression expression, SqlSugarProvider context)
+        {  
+            var member = expression as MemberExpression;
+            if (member == null)
+                return false;
+            if (!(member.Type.IsClass())||member.Type==typeof(string))
+                return false;
+            if (member.Expression == null)
+                return false;
+            var entity = context.EntityMaintenance.GetEntityInfo(member.Expression.Type);
+            var json = entity.Columns.FirstOrDefault(z => z.IsJson && z.PropertyName == member.Member.Name);
+            return json != null;
+        }
+        internal static SugarParameter GetParameterConverter(int index, ISqlSugarClient db, object value, Expression oppoSiteExpression, EntityColumnInfo columnInfo)
+        {
+            var entity = db.EntityMaintenance.GetEntityInfo(oppoSiteExpression.Type);
+            var type = columnInfo.SqlParameterDbType as Type;
+            var ParameterConverter = type.GetMethod("ParameterConverter").MakeGenericMethod(columnInfo.PropertyInfo.PropertyType);
+            var obj = Activator.CreateInstance(type);
+            var p = ParameterConverter.Invoke(obj, new object[] { value, 100 + index }) as SugarParameter;
+            return p;
+        }
+        internal static SugarParameter GetParameterConverter(int index, ISqlSugarClient db, object value, EntityInfo entityInfo, EntityColumnInfo columnInfo)
+        {
+            var entity = entityInfo;
+            var type = columnInfo.SqlParameterDbType as Type;
+            var ParameterConverter = type.GetMethod("ParameterConverter").MakeGenericMethod(columnInfo.PropertyInfo.PropertyType);
+            var obj = Activator.CreateInstance(type);
+            var p = ParameterConverter.Invoke(obj, new object[] { value, 100 + index }) as SugarParameter;
+            return p;
+        }
         public static bool IsCollectionOrArrayButNotByteArray(Type type)
         {
             if (type == null)
@@ -60,7 +90,7 @@ namespace SqlSugar.MongoDb
                 EntityType = lastPareamter.Type,
                 TableName = null
             };
-            newJoins.add(result);
+            newJoins.Add(result);
             queryBuilder.JoinQueryInfos = newJoins;
             MongoDbQueryBuilder mb2 = null;
             if (queryBuilder is MongoDbQueryBuilder mb) 
@@ -103,6 +133,8 @@ namespace SqlSugar.MongoDb
 
         public static BsonValue ParseJsonObject(object json)
         {
+            if (json == null)
+                return BsonValue.Create(null);
             if (json is string str && str.TrimStart().StartsWith("{"))
             { 
                 var arrayObj = BsonDocument.Parse(str);
@@ -110,7 +142,7 @@ namespace SqlSugar.MongoDb
             }
             else
             {
-                using var reader = new JsonReader(json?.toString());
+                using var reader = new JsonReader(json?.ToString());
                 var arrayObj = BsonSerializer.Deserialize<BsonValue>(reader);
                 return arrayObj;
             }
@@ -121,6 +153,14 @@ namespace SqlSugar.MongoDb
             {
                 var utcNow = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
                 return new BsonDateTime(utcNow);
+            }
+            else if (value is Guid g)
+            {
+                value = g.ToString();
+            }
+            else if (value is string s&&IsValidObjectId(s)) 
+            {
+                value = ObjectId.Parse(s);
             }
             return BsonValue.Create(value);
         }
@@ -595,7 +635,7 @@ namespace SqlSugar.MongoDb
 
         internal static BsonValue MyCreate(object value, DbColumnInfo col)
         {
-            if (value != null&&IsObjectColumn(col))
+            if (value != null&&IsObjectColumn(col)&& value is string s&&IsValidObjectId(s))
             {
                 return MyCreate(ObjectId.Parse(value?.ToString()));
             }
@@ -619,8 +659,10 @@ namespace SqlSugar.MongoDb
                 return memberName;
             else if (UtilMethods.IsMongoVariable(memberName))
                 return memberName;
-            else
+            else if (memberName is BsonString)
                 return $"${memberName}";
+            else
+                return memberName;
         }
         //public static object ConvertDataByTypeName(string ctypename,string value)
         //{

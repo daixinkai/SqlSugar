@@ -40,7 +40,25 @@ namespace MongoDbTest
             var list3 = db.Queryable<School>().Where(it=>it.Name== "zz大学"||it.Name== "ss大学").ToPageList(1, 2, ref count);
             if(count!=2||list3.Count!=2) Cases.ThrowUnitError();
             if (list3.First().Name!= "zz大学"|| list3.Last().Name != "ss大学") Cases.ThrowUnitError();
+            db.CodeFirst.InitTables<School2>();
+            db.DbMaintenance.TruncateTable<School2>();
+            db.Insertable(new School2() { StudentCount = 2222 }).ExecuteCommand();
+            db.Insertable(new School2() { StudentCount = 210 }).ExecuteCommand();
+            var count2=db.Queryable<School2>().Max(s => s.StudentCount);
+            if (count2!= 2222) Cases.ThrowUnitError();
+            db.CodeFirst.InitTables<Student2>();
+            db.DbMaintenance.TruncateTable<Student2>();
+            db.Insertable(new Student2() { Bytes = new byte[] { 1, 2 } }).ExecuteCommand();
+            var list4=db.Queryable<Student2>().ToList();
+            db.Insertable(new List<Student2>() { new Student2() { Bytes = new byte[] { 2, 3 } }, new Student2() { Bytes = new byte[] { 3, 3 } } }).ExecuteCommand();
+            var list5 = db.Queryable<Student2>().ToList();
         }
+    }
+    [SqlSugar.SugarTable("UnitStudent12313122")]
+    public class Student2 : MongoDbBase
+    {
+        public string Name { get; set; }
+        public byte[] Bytes { get; set; }
     }
     [SqlSugar.SugarTable("UnitStudent123131")]
     public class Student : MongoDbBase 
@@ -53,5 +71,10 @@ namespace MongoDbTest
     public class School : MongoDbBase 
     {
         public string Name{ get; set; }
+    }
+    [SqlSugar.SugarTable("UnitSchool1231312")]
+    public class School2 : MongoDbBase
+    { 
+        public int StudentCount { get; set; }
     }
 }

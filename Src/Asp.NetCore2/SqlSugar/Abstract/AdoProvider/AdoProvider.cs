@@ -345,10 +345,10 @@ namespace SqlSugar
             var result = new DbResult<bool>();
             try
             {
-                this.BeginTran();
+                this.BeginTran(); 
                 if (action != null)
                     action();
-                this.CommitTran();
+                this.CommitTran(); 
                 result.Data = result.IsSuccess = true;
             }
             catch (Exception ex)
@@ -485,15 +485,18 @@ namespace SqlSugar
                 if (this.ProcessingEventStartingSQL != null)
                     ExecuteProcessingSQL(ref sql, ref parameters);
                 ExecuteBefore(sql, parameters);
-                IDbCommand sqlCommand = GetCommand(sql, parameters);
-                int count = sqlCommand.ExecuteNonQuery();
-                if (this.IsClearParameters)
-                    sqlCommand.Parameters.Clear();
-                // 影响条数
-                this.SqlExecuteCount = count;
-                ExecuteAfter(sql, parameters);
-                sqlCommand.Dispose();
-                return count;
+                using (IDbCommand sqlCommand = GetCommand(sql, parameters))
+                {
+                    int count = sqlCommand.ExecuteNonQuery();
+                    if (this.IsClearParameters)
+                        sqlCommand.Parameters.Clear();
+                    // 影响条数
+                    this.SqlExecuteCount = count;
+                    ExecuteAfter(sql, parameters);
+
+                    //sqlCommand.Dispose();
+                    return count;
+                }
             }
             catch (Exception ex)
             {
@@ -633,18 +636,20 @@ namespace SqlSugar
                 if (this.ProcessingEventStartingSQL != null)
                     ExecuteProcessingSQL(ref sql,ref parameters);
                 ExecuteBefore(sql, parameters);
-                var sqlCommand =IsOpenAsync? await GetCommandAsync(sql, parameters) : GetCommand(sql, parameters);
-                int count;
-                if (this.CancellationToken == null)
-                    count=await sqlCommand.ExecuteNonQueryAsync();
-                else
-                    count=await sqlCommand.ExecuteNonQueryAsync(this.CancellationToken.Value);
-                if (this.IsClearParameters)
-                    sqlCommand.Parameters.Clear();
-                this.SqlExecuteCount = count;
-                ExecuteAfter(sql, parameters);
-                sqlCommand.Dispose();
-                return count;
+                using (var sqlCommand = IsOpenAsync ? await GetCommandAsync(sql, parameters) : GetCommand(sql, parameters))
+                {
+                    int count;
+                    if (this.CancellationToken == null)
+                        count = await sqlCommand.ExecuteNonQueryAsync();
+                    else
+                        count = await sqlCommand.ExecuteNonQueryAsync(this.CancellationToken.Value);
+                    if (this.IsClearParameters)
+                        sqlCommand.Parameters.Clear();
+                    this.SqlExecuteCount = count;
+                    ExecuteAfter(sql, parameters);
+                    //sqlCommand.Dispose();
+                    return count;
+                }
             }
             catch (Exception ex)
             {
@@ -785,7 +790,11 @@ namespace SqlSugar
             }
         }
 
-
+        public virtual Task<string> GetStringAsync(string sql, object parameters, CancellationToken cancellationToken)
+        {
+            this.CancellationToken = cancellationToken;
+            return GetStringAsync(sql, this.GetParameters(parameters));
+        }
         public virtual Task<string> GetStringAsync(string sql, object parameters)
         {
             return GetStringAsync(sql, this.GetParameters(parameters));
@@ -837,7 +846,11 @@ namespace SqlSugar
         {
             return GetScalar(sql, parameters).ObjToInt();
         }
-
+        public virtual Task<int> GetIntAsync(string sql, object parameters, CancellationToken cancellationToken)
+        {
+            this.CancellationToken = cancellationToken;
+            return GetIntAsync(sql, this.GetParameters(parameters));
+        }
         public virtual Task<int> GetIntAsync(string sql, object parameters)
         {
             return GetIntAsync(sql, this.GetParameters(parameters));
@@ -878,7 +891,11 @@ namespace SqlSugar
                 return GetDouble(sql, parameters.ToArray());
             }
         }
-
+        public virtual Task<Double> GetDoubleAsync(string sql, object parameters, CancellationToken cancellationToken)
+        {
+            this.CancellationToken = cancellationToken;
+            return GetDoubleAsync(sql, this.GetParameters(parameters));
+        }
         public virtual Task<Double> GetDoubleAsync(string sql, object parameters)
         {
             return GetDoubleAsync(sql, this.GetParameters(parameters));
@@ -1052,7 +1069,7 @@ namespace SqlSugar
             var result = SqlQuery<T, T2, T3, T4, T5, T6, object>(sql, parameters);
             return new Tuple<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>>(result.Item1, result.Item2, result.Item3, result.Item4, result.Item5, result.Item6);
         }
-        public Tuple<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>, List<T7>> SqlQuery<T, T2, T3, T4, T5, T6, T7>(string sql, object parameters = null)
+        public virtual Tuple<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>, List<T7>> SqlQuery<T, T2, T3, T4, T5, T6, T7>(string sql, object parameters = null)
         {
             var parsmeterArray = this.GetParameters(parameters);
             this.Context.InitMappingInfo<T>();
@@ -1181,7 +1198,7 @@ namespace SqlSugar
             var result =await SqlQueryAsync<T, T2, T3, T4, T5, T6, object>(sql, parameters);
             return new Tuple<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>>(result.Item1, result.Item2, result.Item3, result.Item4, result.Item5, result.Item6);
         }
-        public async Task<Tuple<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>, List<T7>>> SqlQueryAsync<T, T2, T3, T4, T5, T6, T7>(string sql, object parameters = null)
+        public virtual async Task<Tuple<List<T>, List<T2>, List<T3>, List<T4>, List<T5>, List<T6>, List<T7>>> SqlQueryAsync<T, T2, T3, T4, T5, T6, T7>(string sql, object parameters = null)
         {
             var parsmeterArray = this.GetParameters(parameters);
             this.Context.InitMappingInfo<T>();
@@ -1415,6 +1432,11 @@ namespace SqlSugar
                 return GetScalar(sql, parameters.ToArray());
             }
         }
+        public virtual Task<object> GetScalarAsync(string sql, object parameters, CancellationToken cancellationToken)
+        {
+            this.CancellationToken = cancellationToken;
+            return GetScalarAsync(sql, this.GetParameters(parameters));
+        }
         public virtual Task<object> GetScalarAsync(string sql, object parameters)
         {
             return GetScalarAsync(sql, this.GetParameters(parameters));
@@ -1513,7 +1535,7 @@ namespace SqlSugar
                 this.Context.Root.AsyncId = Guid.NewGuid(); ;
             }
         }
-        private static bool NextResult(IDataReader dataReader)
+        protected bool NextResult(IDataReader dataReader)
         {
             try
             {
@@ -1784,7 +1806,7 @@ namespace SqlSugar
 
  
 
-        private List<TResult> GetData<TResult>(Type entityType, IDataReader dataReader)
+        protected List<TResult> GetData<TResult>(Type entityType, IDataReader dataReader)
         {
             List<TResult> result;
             if (entityType == UtilConstants.DynamicType)
@@ -1812,7 +1834,7 @@ namespace SqlSugar
             }
             return result;
         }
-        private async Task<List<TResult>> GetDataAsync<TResult>(Type entityType, IDataReader dataReader)
+        protected async Task<List<TResult>> GetDataAsync<TResult>(Type entityType, IDataReader dataReader)
         {
             List<TResult> result;
             if (entityType == UtilConstants.DynamicType)
