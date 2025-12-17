@@ -1,9 +1,11 @@
-﻿using OrmTest;
+﻿using KdbndpTest.Models;
+using OrmTest;
 using SqlSugar;
 using System;
 using System.Collections.Generic;
- 
+
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -16,7 +18,7 @@ namespace KdbndpTest.SqlServerDemo
             SqlSugarClient Db = new SqlSugarClient(new ConnectionConfig()
             {
                 DbType = DbType.Kdbndp,
-                ConnectionString = "Server=47.100.233.98;Port=54325;UID=system;PWD=12345678;database=test",
+                ConnectionString = "Server=8.137.16.241;Port=321;UID=system;PWD=123456;database=test;CommandTimeout=120;DbVersion=sqlserver;Search Path=dbo;ErrorThrow=true;",
                 InitKeyType = InitKeyType.Attribute,
                 IsAutoCloseConnection = true,
                 MoreSettings = new ConnMoreSettings()
@@ -32,22 +34,54 @@ namespace KdbndpTest.SqlServerDemo
                 };
             });
 
-            InitDatas(Db); 
+            InitDatas(Db);
 
             InsertDemo(Db);
 
-            UpdateDemo(Db); 
+            UpdateDemo(Db);
 
-            QueryDemo(Db); 
+            QueryDemo(Db);
 
-            DeleteDemo(Db); 
+            DeleteDemo(Db);
 
             GetTableInfos(Db);
+
+            BytesTest(Db);
+
+            DataTableTest(Db);
+        }
+
+        private static void DataTableTest(SqlSugarClient db)
+        {
+            db.CodeFirst.InitTables<ByteArrayModel>();
+            db.DbMaintenance.TruncateTable<ByteArrayModel>();
+            db.Insertable(new List<ByteArrayModel>() {
+                new ByteArrayModel() { Id = 1, Bytes = new byte[] { 0, 1 } } }).ExecuteCommand();
+            var dt = db.Queryable<ByteArrayModel>().ToDataTable();
+            db.DbMaintenance.TruncateTable<ByteArrayModel>();
+            List<Dictionary<string, object>> dc = db.Utilities.DataTableToDictionaryList(dt);//5.0.23版本支持
+            db.Insertable(dc).AS("ByteArrayModel02").ExecuteCommand();
+            var list2 = db.Queryable<ByteArrayModel>().ToList();
+            db.DbMaintenance.TruncateTable<ByteArrayModel>();
+            dt.TableName= "ByteArrayModel02";
+            dt.Rows[0][1] = DBNull.Value;
+            var x= db.Storageable(dt).WhereColumns("id").ToStorage();
+            x.AsInsertable.ExecuteCommand();
+        }
+
+        private static void BytesTest(SqlSugarClient db)
+        {
+            db.CodeFirst.InitTables<ByteArrayModel>();
+            db.DbMaintenance.TruncateTable<ByteArrayModel>();
+            db.Insertable(new List<ByteArrayModel>() {
+                new ByteArrayModel() { Id = 1, Bytes = new byte[] { 0, 1 } },
+                new ByteArrayModel() { Id = 2, Bytes = new byte[] { 0, 1 } } }).ExecuteCommand();
+            var list = db.Queryable<ByteArrayModel>().ToList();
         }
 
         private static void QueryDemo(SqlSugarClient Db)
         {
-            var list1 = Db.Queryable<Order>().Where(it => it.CreateTime.AddDays(1)>DateTime.Now).ToList();
+            var list1 = Db.Queryable<Order>().Where(it => it.CreateTime.AddDays(1) > DateTime.Now).ToList();
             var list2 = Db.Queryable<Order>().PartitionBy(it => it.Id).ToList();
             try
             {
@@ -87,16 +121,16 @@ namespace KdbndpTest.SqlServerDemo
                 .SetColumns(it => new Order()
                 {
 
-                     CreateTime=DateTime.Now
+                    CreateTime = DateTime.Now
                 })
-                .Where(it=>it.Id==1).ExecuteCommand();
+                .Where(it => it.Id == 1).ExecuteCommand();
 
             Db.Updateable(Db.Queryable<Order>().Take(2).ToList())
                .ExecuteCommand();
             Db.Updateable(Db.Queryable<Order>().Take(2).ToList())
-                .Where(it=>it.Name!=null).ExecuteCommand();
+                .Where(it => it.Name != null).ExecuteCommand();
 
-          
+
         }
 
         private static void GetTableInfos(SqlSugarClient Db)

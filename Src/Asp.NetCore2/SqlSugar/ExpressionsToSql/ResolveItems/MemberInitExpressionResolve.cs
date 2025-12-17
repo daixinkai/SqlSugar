@@ -201,12 +201,31 @@ namespace SqlSugar
                         base.Context.Result.CurrentParameter = null;
                     }
                 }
+                else if (item is BinaryExpression&&ExpressionTool.NoParameterOrSqlfunc(item))
+                {
+                    var result = LambdaExpression.Lambda(item).Compile().DynamicInvoke();
+                    parameter.Context.Result.Append(base.Context.GetEqString(memberName, AppendParameter(result)));
+                }
                 else if (item is BinaryExpression)
                 {
                     var result = GetNewExpressionValue(item);
                     if (result.HasValue())
                     {
                         result = result.Replace(",", UtilConstants.ReplaceCommaKey);
+                    }
+                    if (item.Type == UtilConstants.BoolType)
+                    {
+                        var trueValue = AppendParameter(true);
+                        var falseValue = AppendParameter(false);
+                        result = new DefaultDbMethod().IIF(new MethodCallExpressionModel()
+                        {
+                            Args = new List<MethodCallExpressionArgs>()
+                         {
+                             new MethodCallExpressionArgs(){ MemberValue=result,MemberName=result },
+                             new MethodCallExpressionArgs(){ MemberValue=trueValue,MemberName=trueValue },
+                             new MethodCallExpressionArgs(){ MemberValue=falseValue,MemberName=falseValue }
+                         }
+                        });
                     }
                     this.Context.Result.Append(base.Context.GetEqString(memberName, result));
                 }

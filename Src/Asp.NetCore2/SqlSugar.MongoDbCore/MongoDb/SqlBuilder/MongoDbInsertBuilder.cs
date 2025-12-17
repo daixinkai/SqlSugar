@@ -2,6 +2,7 @@
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
+using MongoDB.Driver;
 using NetTaste;
 using System;
 using System.Collections;
@@ -34,6 +35,12 @@ namespace SqlSugar.MongoDb
                             list.Add(BsonValue.Create(null));
                         }
                         else if (realType.IsClass())
+                        {
+                            var bson = e.ToBson(realType); // 序列化为 byte[]
+                            var doc = BsonSerializer.Deserialize<BsonDocument>(bson); // 反序列化为 BsonDocument
+                            list.Add(doc);
+                        }
+                        else if (realType.Name== "KeyValuePair`2")
                         {
                             var bson = e.ToBson(realType); // 序列化为 byte[]
                             var doc = BsonSerializer.Deserialize<BsonDocument>(bson); // 反序列化为 BsonDocument
@@ -80,6 +87,10 @@ namespace SqlSugar.MongoDb
 
                     // 再用 BsonSerializer 反序列化为 T
                     return BsonSerializer.Deserialize(bsonDoc, type);
+                }
+                else if(type.Name== "Dictionary`2") 
+                { 
+                    return BsonSerializer.Deserialize(json+"", type);
                 }
                 else if (json is BsonDocument bsons)
                 {
@@ -172,7 +183,7 @@ namespace SqlSugar.MongoDb
                         else
                         {
                             var obj = MongoDbDataReaderHelper.ConvertBsonValue(item);
-                            if (obj is DBNull) 
+                            if (obj is DBNull)
                             {
                                 obj = null;
                             }
@@ -305,8 +316,13 @@ namespace SqlSugar.MongoDb
             foreach (var group in grouped)
             {
                 BsonDocument doc = new BsonDocument();
+                var existsId = false;
                 foreach (var col in group)
                 {
+                    if (col.DbColumnName == "_id") 
+                    {
+                        existsId = true;
+                    }
                     // 自动推断类型，如 string、int、bool、DateTime、ObjectId 等
                     if (col.IsJson == true)
                     {
@@ -330,7 +346,10 @@ namespace SqlSugar.MongoDb
                         doc[col.DbColumnName] = UtilMethods.MyCreate(col.Value);
                     }
                 }
-
+                if (existsId == false) 
+                {
+                    doc["_id"] = ObjectId.GenerateNewId();
+                }
                 // 转为 JSON 字符串（标准 MongoDB shell 格式）
                 string json = doc.ToJson(UtilMethods.GetJsonWriterSettings());
 
