@@ -21,15 +21,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
-		<PackageReference Include="MySqlConnector" Version="2.6.0" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+		<PackageReference Include="MySqlConnector" Version="2.6.1" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageReference Include="Npgsql" Version="9.0.5" />
 		<PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.100" />
 		<PackageReference Include="Oscar.Data.SqlClient" Version="4.2.32" />
 		<PackageReference Include="SqlSugarCore.Dm" Version="8.8.2" />
 		<PackageReference Include="SqlSugarCore.Kdbndp" Version="9.3.8.413" />
-		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
+		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
 	</ItemGroup>
 
 </Project>
