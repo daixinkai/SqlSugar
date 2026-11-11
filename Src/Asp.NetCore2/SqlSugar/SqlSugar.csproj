@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <Version>5.1.4.216</Version>
+    <Version>5.1.4.221</Version>
     <Copyright>sun_kai_xuan</Copyright>
     <PackageProjectUrl>https://github.com/sunkaixuan/SqlSugar</PackageProjectUrl>
     <PackageLicenseUrl></PackageLicenseUrl>
@@ -20,8 +20,8 @@
 	</ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <PackageReference Include="MySqlConnector" Version="2.2.5" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
     <PackageReference Include="Npgsql" Version="5.0.18" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.8.0" />

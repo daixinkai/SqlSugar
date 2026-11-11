@@ -32,7 +32,7 @@ namespace SqlSugar
 
         #region Properties
         public virtual bool IsNoSql { get; set; }
-        internal bool IsOpenAsync { get; set; }
+        protected bool IsOpenAsync { get; set; }
         protected List<IDataParameter> OutputParameters { get; set; }
         public virtual string SqlParameterKeyWord { get { return "@"; } }
         public IDbTransaction Transaction { get; set; }
@@ -218,7 +218,14 @@ namespace SqlSugar
             {
                 try
                 {
-                    await (this.Connection as DbConnection).OpenAsync();
+                    if (this.CancellationToken != null)
+                    {
+                        await (this.Connection as DbConnection).OpenAsync(this.CancellationToken.Value);
+                    }
+                    else
+                    {
+                        await (this.Connection as DbConnection).OpenAsync();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1469,7 +1476,7 @@ namespace SqlSugar
         }
         public Task<int> ExecuteCommandAsync(string sql, object parameters, CancellationToken cancellationToken) 
         {
-            this.CancellationToken = CancellationToken;
+            this.CancellationToken = cancellationToken;
             return ExecuteCommandAsync(sql,parameters);
         }
         public virtual Task<int> ExecuteCommandAsync(string sql, object parameters)
